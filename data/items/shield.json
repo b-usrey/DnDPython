@@ -1,0 +1,7 @@
+{
+    "name": "shield",
+    "item_type": "shield",
+    "base_ac":2,
+    "magic_bonus": 0,
+    "description": "Magical +1 Studded Leather"
+  }

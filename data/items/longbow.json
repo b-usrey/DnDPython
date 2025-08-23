@@ -1,0 +1,16 @@
+{
+    "name": "Longbow",
+    "item_type": "weapon",
+    "damage_die": 8,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "attack_type":"range",
+    "damage_type":"piercing",
+    "short_range":150,
+    "long_range":600,
+    "is_magic":0,
+    "ability":"Dex",
+    "properties":["ammunition","heavy","range","two-handed"],
+    "description": "A ranged weapon, 150/600 ft."
+  }
+  

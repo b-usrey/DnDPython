@@ -1,0 +1,8 @@
+{
+    "name": "+1 Studded Leather",
+    "item_type": "armor",
+    "base_ac":12,
+    "armor_type":"light",
+    "magic_bonus": 1,
+    "description": "Magical +1 Studded Leather"
+  }

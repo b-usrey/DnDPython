@@ -1,0 +1,15 @@
+{
+  "name": "Ranger",
+  "hit_die": 10,
+  "savingThrow":["Str","Dex"],
+  "base_ac": 14,
+  "attack_bonus": 4,
+  "damage_die": 8,
+  "features": [
+    "Favored Enemy",
+    "Natural Explorer"
+  ],
+  "spells": {
+    "1": ["Hunter's Mark", "Cure Wounds"]
+  }
+}
