@@ -11,11 +11,9 @@ from utils.loader import load_class_json
 from utils.load_item import load_item_json
 from core.player2 import PlayerCharacter
 from core.events import EventManager
-from core.creature import Creature
 from data.monsters.monsters import *
 from data.features.features import *
 from utils.creatureFactory import CreatureFactory
-from utils.playerFactory import PlayerFactory
 
 from pdb import set_trace as S
 
