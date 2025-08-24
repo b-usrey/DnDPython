@@ -36,9 +36,10 @@ def main():
     Brendiir.add_item(studded_leather_p1)
     Brendiir.equip_item("+1 studded leather")
     Brendiir.equip_item("Longbow")
-    Brendiir.features.append(Sharpshooter("Sharpshooter"))
+    Brendiir.features.append(Sharpshooter())
     goblin = factory.create(GOBLIN,event)
-    Brendiir.perform_attack(goblin)
+    Brendiir.perform_attack(goblin,item=longbow)
+    S()
 
 if __name__ == "__main__":
     main()

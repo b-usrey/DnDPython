@@ -1,7 +1,8 @@
 {
     "name": "Longbow",
     "item_type": "weapon",
-    "damage_die": 8,
+    "weapon_type":"martial",
+    "damage_die": "1d8",
     "attack_bonus": 0,
     "damage_bonus": 0,
     "attack_type":"range",

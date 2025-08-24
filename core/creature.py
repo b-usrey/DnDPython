@@ -3,6 +3,7 @@ from core.actionTracker import ActionTracker
 from core.statBlock import StatBlock
 from core.creature_observer import CreatureObserver
 from core.attack import WeaponAttack
+from data.features.features import Feature
 import random
 import itertools
 
@@ -16,6 +17,7 @@ class Creature:
         self.hp = hp
         self.ac = ac
         self.statblock = StatBlock(stats, proficiency)
+        self.proficiency = proficiency
         self.observer = CreatureObserver(self)
         self.event_manager = eventManager
         self.event_manager.register(eventManager)
@@ -77,9 +79,10 @@ class Creature:
         self.actions.reset()
     def is_alive(self):
         return self.hp > 0 
-    def perform_attack(self,target):
-        attack = WeaponAttack(self,target,8)
+    def perform_attack(self,target,item=None):
+        attack = WeaponAttack(self,target,"1d8",item=item)
         for f in self.features:
-            f.on_attack(attack)
+            if isinstance(f,Feature):
+                f.on_attack(attack)
         attack.roll_to_hit()
         print(attack.result)

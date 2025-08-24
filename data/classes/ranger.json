@@ -29,13 +29,16 @@
   },
   "features_by_level": {
     "1": [
-      { "name": "Favored Enemy" },
-      { "name": "Natural Explorer" }
+      { "name": "Favored Foe" },
+      { "name": "Deft Explorer" }
     ],
     "2": [
       {
         "name": "Fighting Style",
         "options": [
+          "Bling Fighting",
+          "Druidic Warrior",
+          "Thrown Weapon FIghting",
           "Archery",
           "Defense",
           "Dueling",

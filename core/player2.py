@@ -3,6 +3,7 @@ FOLDER_PATH= os.sep.join(os.path.abspath(__file__).split(os.sep)[:-1])
 from pdb import set_trace as S
 import math
 from core.creature import Creature
+from data.features.features import Feature
 import json
 FLAG_IS_OMNIPOTENT = True
 class PlayerCharacter(Creature):
@@ -28,6 +29,15 @@ class PlayerCharacter(Creature):
             self.hp += (class_data['hit_die']/2+1+self.statblock.mods['Con'])*cls[1]+class_data['hit_die']/2-1 if idx == 0 else 0
         self.team=team
         self.spells = {}
+    def _add_feature_by_name(self, name):
+        """Helper to add a feature from the registry by name."""
+        if name in Feature.REGISTRY:
+            feature_class = Feature.REGISTRY[name]
+            # Instantiate feature — if it needs args, you can pass them here
+            self.features.append(feature_class())
+        else:
+            print(f"⚠ Feature {name} not found in registry, storing raw name")
+            self.features.append(name)  # fallback to string
     def get_class_features(self, class_name,level,data_folder,subclass=None):
         """
         class_name: Name of class you want to add, should be coming from character creation
@@ -45,10 +55,10 @@ class PlayerCharacter(Creature):
             lvl += 1
             if str(lvl) in class_data['features_by_level']:
                 for feat in class_data['features_by_level'][str(lvl)]:
-                    pass #self.features.append(feat['name'])
+                    self.features.append(self._add_feature_by_name(feat['name']))
             if subclass_data and str(lvl) in subclass_data['features_by_level']:
                 for sub_feat in subclass_data['features_by_level'][str(lvl)]:
-                    pass #self.features.append(sub_feat['name'])
+                    self.features.append(sub_feat['name'])
         return class_data
 
     def add_item(self,item):
@@ -78,4 +88,3 @@ class PlayerCharacter(Creature):
         for attackOption in self.attacks:
             if target and FLAG_IS_OMNIPOTENT:
                 targetAC = target.ac
-                S()
