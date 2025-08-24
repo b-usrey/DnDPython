@@ -5,19 +5,20 @@ class CreatureFactory:
         # Keep track of all spawned creatures
         self.registry = {}
 
-    def create(self, template):
+    def create(self, template, observer):
         creature = Creature(
             name=template["name"],
             hp=template["hp"],
             ac=template["ac"],
             stats=template["stats"],
-            proficiency=template.get("proficiency", 2)
+            proficiency=template.get("proficiency", 2),
+            eventManager=observer
         )
         # Add attacks
-        for atk in template.get("attacks", []):
-            creature.attacks.append(
-                Attack(atk["name"], atk["attack_bonus"], atk["damage_die"], atk.get("damage_mod", 0))
-            )
+        #for atk in template.get("attacks", []):
+        #    creature.attacks.append(
+        #        Attack(atk["name"], atk["attack_bonus"], atk["damage_die"], atk.get("damage_mod", 0))
+        #    )
 
         # Register creature by unique ID
         self.registry[creature.ID] = creature

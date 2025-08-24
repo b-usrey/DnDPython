@@ -1,0 +1,33 @@
+{
+  "name": "Fighter",
+  "hit_die": 10,
+  "saving_throws": ["STR", "CON"],
+
+  "proficiencies": {
+    "armor": ["all", "shields"],
+    "weapons": ["simple", "martial"],
+    "tools": [],
+    "skills_choose": {
+      "count": 2,
+      "options": ["Acrobatics", "Animal Handling", "Athletics", "History", "Insight", "Intimidation", "Perception", "Survival"]
+    }
+  },
+
+  "multiclass_proficiencies": {
+    "armor": ["light"],
+    "weapons": ["simple"],
+    "tools": []
+  },
+
+  "features": [
+    { "level": 1, "name": "Fighting Style", "description": "Choose one fighting style." },
+    { "level": 1, "name": "Second Wind", "description": "Regain HP once per rest." },
+    { "level": 2, "name": "Action Surge", "description": "Take one additional action." }
+  ],
+
+  "subclasses": {
+    "Champion": [
+      { "level": 3, "name": "Improved Critical", "description": "Crit on 19–20." }
+    ]
+  }
+}

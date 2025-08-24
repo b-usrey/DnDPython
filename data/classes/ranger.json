@@ -1,15 +1,105 @@
 {
-  "name": "Ranger",
+  "class_name": "Ranger",
   "hit_die": 10,
-  "savingThrow":["Str","Dex"],
-  "base_ac": 14,
-  "attack_bonus": 4,
-  "damage_die": 8,
-  "features": [
-    "Favored Enemy",
-    "Natural Explorer"
-  ],
-  "spells": {
-    "1": ["Hunter's Mark", "Cure Wounds"]
+  "primary_abilities": ["Dexterity", "Wisdom"],
+  "saving_throws": ["Strength", "Dexterity"],
+  "armor_proficiencies": ["light", "medium", "shields"],
+  "weapon_proficiencies": ["simple", "martial"],
+  "tool_proficiencies": [],
+  "skill_choices": {
+    "choose": 3,
+    "options": [
+      "Animal Handling",
+      "Athletics",
+      "Insight",
+      "Investigation",
+      "Nature",
+      "Perception",
+      "Stealth",
+      "Survival"
+    ]
+  },
+  "multiclassing": {
+    "requirements": {
+      "Dexterity": 13,
+      "Wisdom": 13
+    },
+    "armor_proficiencies": ["light", "medium", "shields"],
+    "weapon_proficiencies": ["simple", "martial"]
+  },
+  "features_by_level": {
+    "1": [
+      { "name": "Favored Enemy" },
+      { "name": "Natural Explorer" }
+    ],
+    "2": [
+      {
+        "name": "Fighting Style",
+        "options": [
+          "Archery",
+          "Defense",
+          "Dueling",
+          "Two-Weapon Fighting"
+        ]
+      },
+      { "name": "Spellcasting" }
+    ],
+    "3": [
+      {
+        "name": "Ranger Archetype",
+        "options": ["Hunter", "Beast Master", "Gloom Stalker"]
+      },
+      { "name": "Primeval Awareness" }
+    ],
+    "5": [
+      { "name": "Extra Attack" }
+    ]
+  },
+  "subclasses": {
+    "gloomstalker": {
+      "features_by_level": {
+        "3": [
+          {
+            "name": "Dread Ambusher",
+            "description": "At the start of your first turn of each combat, your walking speed increases by 10 feet, and if you take the Attack action you can make one additional weapon attack dealing an extra 1d8 damage."
+          },
+          {
+            "name": "Umbral Sight",
+            "description": "You gain darkvision out to 60 feet, or an additional 30 feet if you already have it. Creatures that rely on darkvision cannot see you in darkness."
+          }
+        ],
+        "7": [
+          {
+            "name": "Iron Mind",
+            "description": "You gain proficiency in Wisdom saving throws. If you already have it, you can choose Intelligence or Charisma."
+          }
+        ],
+        "11": [
+          {
+            "name": "Stalker’s Flurry",
+            "description": "Once per turn, if you miss with a weapon attack, you can make another attack as part of the same action."
+          }
+        ],
+        "15": [
+          {
+            "name": "Shadowy Dodge",
+            "description": "When a creature makes an attack roll against you, you can use your reaction to impose disadvantage on the roll."
+          }
+        ]
+      }
+    }
+  },
+  "spellcasting": {
+    "spell_list": "ranger",
+    "spellcasting_ability": "Wisdom",
+    "progression": {
+      "1": { "slots": [2] },
+      "2": { "slots": [2] },
+      "3": { "slots": [3] },
+      "4": { "slots": [3] },
+      "5": { "slots": [4, 2] },
+      "9": { "slots": [4, 3, 2] }
+    }
   }
 }
+

@@ -2,12 +2,15 @@
 from core.actionTracker import ActionTracker
 from core.statBlock import StatBlock
 from core.creature_observer import CreatureObserver
+from core.attack import WeaponAttack
 import random
 import itertools
 
+from pdb import set_trace as S
+
 class Creature:
     _id_counter = itertools.count(1)
-    def __init__(self, name, hp, ac, stats, eventManager,attacks=[],proficiency=2):
+    def __init__(self, name, hp, ac, stats, eventManager,proficiency=2):
         self.ID = next(Creature._id_counter)
         self.name = name
         self.hp = hp
@@ -16,12 +19,11 @@ class Creature:
         self.observer = CreatureObserver(self)
         self.event_manager = eventManager
         self.event_manager.register(eventManager)
-        self.attacks = attacks if attacks else []   # list of Attack objects
         self.actions = ActionTracker()
         self.team = "red"
         self.inventory = []
-        self.equiped_items = []
-        self.equiped_slots = {"armor":False,"hand1":False,"hand2":False,"Ring":[],"Boots":False,"Cloak":False}
+        self.equipped_items = []
+        self.equipped_slots = {"armor":None,"hand1":None,"hand2":None,"Ring":[],"Boots":None,"Cloak":None}
         self.initiative_mod = 0
         self.initiative_advantage = False
         self.initiative_roll = None
@@ -36,25 +38,26 @@ class Creature:
         if item.item_type == "weapon" or item.item_type == "shield":
             #Check for has properties to hand shields using the same equiping logic
             if hasattr(item,"properties") and "two-handed" in item.properties:
-                if not self.equiped_slots["hand1"] and not self.equiped_slots["hand2"]:
-                    self.equiped_slots["hand1"] = True
-                    self.equiped_slots["hand2"] = True
-                    self.equiped_items.append(item)
+                if not self.equipped_slots["hand1"] and not self.equipped_slots["hand2"]:
+                    self.equipped_slots["hand1"] = item.name
+                    self.equipped_slots["hand2"] = item.name
+                    self.equipped_items.append(item)
                 else:
                     print(f"Failed to equip {item.name} because you don't have two free hands")
             else:
-                if not self.equiped_slots["hand1"] or not self.equiped_slots["hand2"]:
-                    if not self.equpied_slots["hand1"]:
-                        self.equpied_slots["hand1"] = True
+                if not self.equipped_slots["hand1"] or not self.equipped_slots["hand2"]:
+                    if not self.equipped_slots["hand1"]:
+                        self.equipped_slots["hand1"] = item.name
                     else:
-                        self.equiped_slots["hand2"] = True
-                    self.equiped_items.append(item)
+                        self.equipped_slots["hand2"] = item.name
+                    self.equipped_items.append(item)
                 else:
                     print(f"Failed to equip {item.name} because you don't have a free hand")
+            self.attack_options()
         if item.item_type == "armor":
-            if not self.equiped_slots["armor"]:
-                self.equiped_slots["armor"] = True
-                self.equiped_items.append(item)
+            if not self.equipped_slots["armor"]:
+                self.equipped_slots["armor"] = item.name
+                self.equipped_items.append(item)
             else:
                 print(f"Failed to equip {item.name} because you are already wearing armor")
         #TODO Recalculate values (attackMod,saveThrow,AC,HP)
@@ -66,9 +69,17 @@ class Creature:
         else:
             self.initiative_roll = roll1
         return self.initiative_roll
-
+    def attack_options(self):
+        for item in self.equipped_items:
+            if item.item_type == "weapon":
+                pass #TODO Logic should go here for add attack option when weapons are equipped
     def start_turn(self):
         self.actions.reset()
-
     def is_alive(self):
-        return self.hp > 0
+        return self.hp > 0 
+    def perform_attack(self,target):
+        attack = WeaponAttack(self,target,8)
+        for f in self.features:
+            f.on_attack(attack)
+        attack.roll_to_hit()
+        print(attack.result)
