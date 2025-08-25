@@ -14,35 +14,27 @@ from core.events import EventManager
 from data.monsters.monsters import *
 from data.features.features import *
 from utils.creatureFactory import CreatureFactory
-
+from utils.scenarioLoader import ScenarioLoader
+import json
 from pdb import set_trace as S
 
 def is_side_fighting(side):
     return True if True in [creature.is_alive() for creature in side] else False
-
+def load_json(filename):
+    """Utility to load scenario JSON from file."""
+    with open(os.path.join("scenarios", filename), "r") as f:
+        return json.load(f)
 def main():
     event = EventManager()
-    # Load Ranger class from JSON
     factory = CreatureFactory()
-    brendiirStats = {"Str":10,"Dex":20,"Con":14,"Int":9,"Wis":16,"Cha":8}
-    blueTeam = []
-    redTeam = []
-    longbow = load_item_json("longbow")
-    bracers = load_item_json("bracersOfArchery")
-    studded_leather_p1 = load_item_json("studded_leather+1")
-    BrendiirChoices = [("Ranger",2,"Fighting Style","Archery")]
-    Brendiir = PlayerCharacter("Brendiir",[("Ranger",8)],{"Ranger":"Gloomstalker"},brendiirStats,event,BrendiirChoices)
-    blueTeam.append(Brendiir)
-    Brendiir.add_item(longbow)
-    Brendiir.add_item(studded_leather_p1)
-    Brendiir.add_item(bracers)
-    Brendiir.equip_item("+1 studded leather")
-    Brendiir.equip_item("Longbow")
-    Brendiir.equip_item("Bracers of Archery")
-    Brendiir.features.append(Sharpshooter())
-    goblin = factory.create(GOBLIN,event)
-    goblin2 = factory.create(GOBLIN,event)
-    Brendiir.perform_attack(goblin,item=longbow)
-    S()
+    # Load scenario (could come from a .json file)
+    scenario_data = load_json("brendiir_vs_goblins.json")
+    loader = ScenarioLoader(factory, event)
+    players, monsters = loader.load(scenario_data)
+    # Example combat start
+    brendiir = players[0]
+    goblin = monsters[0]
+
+    brendiir.perform_attack(goblin, item=brendiir.get_item("longbow"))
 if __name__ == "__main__":
     main()

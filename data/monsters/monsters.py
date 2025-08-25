@@ -23,4 +23,7 @@ ORC = {
 }
 
 # Optional: collection for iteration
-ALL_MONSTERS = [GOBLIN, ORC]
+MONSTER_REGISTRY = {
+    "GOBLIN": GOBLIN,
+    "ORC": ORC,
+}

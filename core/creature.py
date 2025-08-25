@@ -35,6 +35,10 @@ class Creature:
         self.initiative_mod = 0
         self.initiative_advantage = False
         self.initiative_roll = None
+    def get_item(self,itemName):
+        for item in self.inventory:
+            if item.name.lower() == itemName.lower():
+                return item
     def notify(self,event_type,data):
         """Called whenever EventManager broadcasts an event"""
         if event_type == "attack_rolled":
