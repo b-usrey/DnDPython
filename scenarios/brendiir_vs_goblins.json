@@ -1,0 +1,18 @@
+{
+  "name": "Brendiir vs Goblins",
+  "players": [
+    {
+      "name": "Brendiir",
+      "classes": [["Ranger", 8]],
+      "subclasses": {"Ranger": "Gloomstalker"},
+      "stats": {"Str": 10, "Dex": 20, "Con": 14, "Int": 9, "Wis": 16, "Cha": 8},
+      "choices": [["Ranger", 2, "Fighting Style", "Archery"]],
+      "items": ["longbow", "studded_leather+1", "bracersOfArchery"],
+      "equipped": ["Longbow", "+1 Studded Leather", "Bracers Of Archery"],
+      "features": ["Sharpshooter"]
+    }
+  ],
+  "monsters": [
+    {"type": "GOBLIN", "count": 2}
+  ]
+}
