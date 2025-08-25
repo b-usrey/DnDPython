@@ -3,17 +3,19 @@ import random
 from pdb import set_trace as S
 
 class Attack(ABC):
-    def __init__(self, attacker, target, base_dice,item=None,):
+    def __init__(self, attacker, target, base_dice,item=None,range=False):
         self.attacker = attacker
         self.target = target
         self.base_dice = (int(base_dice.split("d")[0]),int(base_dice.split("d")[1]))  # (num, sides)
         self.to_hit_mod = 0
         self.damage_mod = 0
+        self.range = range
         if item and item.item_type == "weapon":
             self.base_dice = (int(item.damage_die.split("d")[0]),int(item.damage_die.split("d")[1]))
             self.to_hit_mod = attacker.statblock.mods[item.ability]+item.attack_bonus+attacker.proficiency
             self.damage_mod = attacker.statblock.mods[item.ability]+item.damage_bonus
-
+            if item.attack_type == "range":
+                self.range = True
         # context-like modifiers
         self.extra_dice = []
         self.advantage = False

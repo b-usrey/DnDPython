@@ -1,3 +1,4 @@
+from pdb import set_trace as S
 class EventManager:
     def __init__(self):
         self.observers = []

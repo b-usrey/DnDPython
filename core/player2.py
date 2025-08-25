@@ -7,13 +7,17 @@ from data.features.features import Feature
 import json
 FLAG_IS_OMNIPOTENT = True
 class PlayerCharacter(Creature):
-    def __init__(self, name, classes,subclasses,stats,event,feats=[],team="blue"):
+    def __init__(self, name, classes,subclasses,stats,event,choices,feats=[],team="blue"):
         """
         name: Character name (string)
         class_levels: list of tuples -> [(className, level), (className, level), ...]
         sublcasses: dict {className:subclassName,...}
+        stats: dict of stats
+        event: EventManager for broadcasting and receiving messages
+        choices: choies for character levels [("Ranger",2,"Fighting Style","Archery")]
         """
         self.attacks = []
+        self.choices = choices
         self.hp = 0
         self.update_items = False
         self.feats = feats
@@ -25,40 +29,44 @@ class PlayerCharacter(Creature):
             subclass=None
             if cls[0] in subclasses:
                 subclass = subclasses[cls[0]]
-            class_data = self.get_class_features(cls[0],cls[1],os.path.join(FOLDER_PATH,"..","data","classes"),subclass=subclass)
+            class_data = self.get_class_features(cls[0],cls[1],os.path.join(FOLDER_PATH,"..","data","classes"),sub_class=subclass)
             self.hp += (class_data['hit_die']/2+1+self.statblock.mods['Con'])*cls[1]+class_data['hit_die']/2-1 if idx == 0 else 0
         self.team=team
         self.spells = {}
-    def _add_feature_by_name(self, name):
-        """Helper to add a feature from the registry by name."""
-        if name in Feature.REGISTRY:
-            feature_class = Feature.REGISTRY[name]
-            # Instantiate feature — if it needs args, you can pass them here
-            self.features.append(feature_class())
-        else:
-            print(f"⚠ Feature {name} not found in registry, storing raw name")
-            self.features.append(name)  # fallback to string
-    def get_class_features(self, class_name,level,data_folder,subclass=None):
+    
+    def get_class_features(self, class_name,level,data_folder,sub_class=None):
         """
         class_name: Name of class you want to add, should be coming from character creation
         """
         file_path = os.path.join(data_folder,f"{class_name.lower()}.json")
         with open(file_path) as f:
             class_data = json.load(f)
-        if subclass:
+        if sub_class:
             subclass_data = None
-            if subclass.replace(" ","").lower() in class_data['subclasses']:
-                subclass_data = class_data['subclasses'][subclass.replace(" ","").lower()]
+            if sub_class.replace(" ","").lower() in class_data['subclasses']:
+                subclass_data = class_data['subclasses'][sub_class.replace(" ","").lower()]
             else:
-                print(f"Couldn't find {subclass} in {class_name} data")
+                print(f"Couldn't find {sub_class} in {class_name} data")
         for lvl in range(level):
             lvl += 1
             if str(lvl) in class_data['features_by_level']:
                 for feat in class_data['features_by_level'][str(lvl)]:
-                    self.features.append(self._add_feature_by_name(feat['name']))
+                    featName = feat['name']
+                    if "options" in feat:
+                        for opt in feat['options']:
+                            if (class_name,lvl,feat['name'],opt) in self.choices:
+                                featName = opt
+                    self.features.append(self._add_feature_by_name(featName))
             if subclass_data and str(lvl) in subclass_data['features_by_level']:
+                choiceFound = False
                 for sub_feat in subclass_data['features_by_level'][str(lvl)]:
-                    self.features.append(sub_feat['name'])
+                    featName = sub_feat['name']
+                    if "options" in feat:
+                        for opt in feat['options']:
+                            if (sub_class,lvl,sub_feat['name'],opt) in self.choices:
+                                featName = opt
+                                choiceFound = True
+                    self.features.append(self._add_feature_by_name(featName))
         return class_data
 
     def add_item(self,item):

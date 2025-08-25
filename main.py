@@ -28,18 +28,21 @@ def main():
     blueTeam = []
     redTeam = []
     longbow = load_item_json("longbow")
+    bracers = load_item_json("bracersOfArchery")
     studded_leather_p1 = load_item_json("studded_leather+1")
-    
-    Brendiir = PlayerCharacter("Brendiir",[("Ranger",8)],{"Ranger":"Gloomstalker"},brendiirStats,event)
+    BrendiirChoices = [("Ranger",2,"Fighting Style","Archery")]
+    Brendiir = PlayerCharacter("Brendiir",[("Ranger",8)],{"Ranger":"Gloomstalker"},brendiirStats,event,BrendiirChoices)
     blueTeam.append(Brendiir)
     Brendiir.add_item(longbow)
     Brendiir.add_item(studded_leather_p1)
+    Brendiir.add_item(bracers)
     Brendiir.equip_item("+1 studded leather")
     Brendiir.equip_item("Longbow")
+    Brendiir.equip_item("Bracers of Archery")
     Brendiir.features.append(Sharpshooter())
     goblin = factory.create(GOBLIN,event)
+    goblin2 = factory.create(GOBLIN,event)
     Brendiir.perform_attack(goblin,item=longbow)
     S()
-
 if __name__ == "__main__":
     main()

@@ -12,6 +12,12 @@ from pdb import set_trace as S
 class Creature:
     _id_counter = itertools.count(1)
     def __init__(self, name, hp, ac, stats, eventManager,proficiency=2):
+        '''
+        name: Name of character, doesn't have to be unique
+        hp: HP of creature
+        ac: AC of creature, could change later based on equipment
+        eventManager: observer used to broadcast and receive messages
+        '''
         self.ID = next(Creature._id_counter)
         self.name = name
         self.hp = hp
@@ -20,18 +26,33 @@ class Creature:
         self.proficiency = proficiency
         self.observer = CreatureObserver(self)
         self.event_manager = eventManager
-        self.event_manager.register(eventManager)
+        self.event_manager.register(self)
         self.actions = ActionTracker()
         self.team = "red"
         self.inventory = []
         self.equipped_items = []
-        self.equipped_slots = {"armor":None,"hand1":None,"hand2":None,"Ring":[],"Boots":None,"Cloak":None}
+        self.equipped_slots = {"armor":None,"hand1":None,"hand2":None,"Ring":[],"Boots":None,"Cloak":None,"Bracers":None,}
         self.initiative_mod = 0
         self.initiative_advantage = False
         self.initiative_roll = None
-    
+    def notify(self,event_type,data):
+        """Called whenever EventManager broadcasts an event"""
+        if event_type == "attack_rolled":
+            if data['attacker'].ID != self.ID:
+                print(f"{self.name} sees a total roll of {data['data']['attack_total']}")
+            if data['target'].ID == self.ID:
+                print("Run away")
     def add_item(self,item):
         self.inventory.append(item)
+    def _add_feature_by_name(self, name):
+        """Helper to add a feature from the registry by name."""
+        if name in Feature.REGISTRY:
+            feature_class = Feature.REGISTRY[name]
+            # Instantiate feature — if it needs args, you can pass them here
+            self.features.append(feature_class())
+        else:
+            print(f"⚠ Feature {name} not found in registry, storing raw name")
+            self.features.append(name)  # fallback to string   
     def equip_item(self,item_name):
         item = next((i for i in self.inventory if i.name.lower() == item_name.lower()),None)
         if not item:
@@ -62,7 +83,13 @@ class Creature:
                 self.equipped_items.append(item)
             else:
                 print(f"Failed to equip {item.name} because you are already wearing armor")
-        #TODO Recalculate values (attackMod,saveThrow,AC,HP)
+        if item.item_type == "trinket":
+            if not self.equipped_slots[item.item_slot]:
+                self.equipped_items.append(item)
+                self.equipped_slots[item.item_slot] = item.name
+        for item in self.equipped_items:
+            if hasattr(item,"feature"):
+                self.features.append(self._add_feature_by_name(item.name))
     def roll_initiative(self):
         roll1 = random.randint(1, 20) + self.statblock.mod("Dex") + self.initiative_mod
         if self.initiative_advantage:
@@ -85,4 +112,16 @@ class Creature:
             if isinstance(f,Feature):
                 f.on_attack(attack)
         attack.roll_to_hit()
+        attackData={"attacker":self,
+                    "target":target,
+                    "data":attack.result}
+        self.event_manager.broadcast("attack_rolled",attackData)
         print(attack.result)
+    def observe_attack(self, data):
+        """Called whenever *any* creature attacks"""
+        attacker = data["attacker"]
+        target = data["target"]
+
+        # Don't report if I'm the one attacking
+        if attacker is not self:
+            print(f"{self.name} sees {attacker.name} attack {target.name}!")
