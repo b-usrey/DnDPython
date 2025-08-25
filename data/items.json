@@ -1,0 +1,27 @@
+{
+    "Longbow":{
+        "name":"Longbow",
+        "type":"weapon",
+        "damage_die":"1d8",
+        "damageType":"piercing",
+        "ability":"Dex",
+        "weapon_type":"martial",
+        "attack_type":"range",
+        "properties":["two-handed","heavy","ammunition"]
+    },
+    "Studded Leather": {
+        "name":"Studded Leather",
+        "type":"armor",
+        "base_ac":12,
+        "armor_type":"light",
+        "Description":"Studded Leather Armor"
+    },
+    "Bracers Of Archery":{
+        "name":"Bracers Of Archery",
+        "type":"trinket",
+        "item_slot":"Bracers",
+        "required_attunement":"True",
+        "feature":"BracersOfArchery",
+        "description": "A ranged weapon, 150/600 ft."
+    }
+}
