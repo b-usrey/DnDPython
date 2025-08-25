@@ -114,6 +114,7 @@ class Creature:
         attack = WeaponAttack(self,target,"1d8",item=item)
         for f in self.features:
             if isinstance(f,Feature):
+                print(f.name," is being applied")
                 f.on_attack(attack)
         attack.roll_to_hit()
         attackData={"attacker":self,

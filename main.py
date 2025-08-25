@@ -37,7 +37,7 @@ def main(args):
     print("Brendiir's Features are ",brendiir.features)
     goblin = monsters[0]
 
-    brendiir.perform_attack(goblin, item=brendiir.get_item("longbow"))
+    brendiir.perform_attack(goblin, item=brendiir.get_item("Longbow+1"))
 if __name__ == "__main__":
     from argparse import ArgumentParser
     parser = ArgumentParser()
