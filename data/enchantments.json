@@ -1,0 +1,17 @@
+{
+  "+1": {
+    "attack_bonus": 1,
+    "damage_bonus": 1,
+    "ac_bonus": 1
+  },
+  "+2": {
+    "attack_bonus": 2,
+    "damage_bonus": 2,
+    "ac_bonus": 2
+  },
+  "+3":{
+    "attack_bonus": 3,
+    "damage_bonus": 3,
+    "ac_bonus": 3
+  }
+}

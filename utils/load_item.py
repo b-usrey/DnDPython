@@ -7,8 +7,8 @@ def load_json(file):
     with open(file,"r") as f:
         return json.load(f)
 def load_item_json(item_name):
-    ITEM_DATA = load_json("data\\items.json")
-    ENCHANTMENTS = load_json("data\\items\enchantments.json")
+    ITEM_DATA = load_json("data\items.json")
+    ENCHANTMENTS = load_json("data\enchantments.json")
     base_name = item_name
     enchantKey = None
     if "+" in item_name:
