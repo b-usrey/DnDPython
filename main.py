@@ -24,17 +24,23 @@ def load_json(filename):
     """Utility to load scenario JSON from file."""
     with open(os.path.join("scenarios", filename), "r") as f:
         return json.load(f)
-def main():
+def main(args):
     event = EventManager()
     factory = CreatureFactory()
     # Load scenario (could come from a .json file)
-    scenario_data = load_json("brendiir_vs_goblins.json")
+    scenario_data = load_json(args.json)
     loader = ScenarioLoader(factory, event)
     players, monsters = loader.load(scenario_data)
     # Example combat start
     brendiir = players[0]
+    print("Brendir has ",brendiir.inventory," in his inventory")
+    print("Brendiir's Features are ",brendiir.features)
     goblin = monsters[0]
 
     brendiir.perform_attack(goblin, item=brendiir.get_item("longbow"))
 if __name__ == "__main__":
-    main()
+    from argparse import ArgumentParser
+    parser = ArgumentParser()
+    parser.add_argument("--json",help="Path to scenario json you want to load")
+    args = parser.parse_args()
+    main(args)
