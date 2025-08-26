@@ -54,7 +54,7 @@ class PlayerCharacter(Creature):
                     featName = feat['name']
                     if "options" in feat:
                         for opt in feat['options']:
-                            if (class_name,lvl,feat['name'],opt) in self.choices:
+                            if [class_name,lvl,feat['name'],opt] in self.choices:
                                 featName = opt
                     self.features.append(self._add_feature_by_name(featName))
             if subclass_data and str(lvl) in subclass_data['features_by_level']:
@@ -63,7 +63,7 @@ class PlayerCharacter(Creature):
                     featName = sub_feat['name']
                     if "options" in feat:
                         for opt in feat['options']:
-                            if (sub_class,lvl,sub_feat['name'],opt) in self.choices:
+                            if [sub_class,lvl,sub_feat['name'],opt] in self.choices:
                                 featName = opt
                                 choiceFound = True
                     self.features.append(self._add_feature_by_name(featName))

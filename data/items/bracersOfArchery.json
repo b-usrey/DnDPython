@@ -1,8 +1,0 @@
-{
-    "name": "Bracers of Archery",
-    "item_type": "trinket",
-    "item_slot":"Bracers",
-    "required_attunement":"True",
-    "feature":"BracersOfArchery",
-    "description": "A ranged weapon, 150/600 ft."
-  }

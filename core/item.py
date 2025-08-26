@@ -1,8 +1,8 @@
 from pdb import set_trace as S
 class Item:
-    def __init__(self, name, item_type, **kwargs):
+    def __init__(self, name, type, **kwargs):
         self.name = name
-        self.item_type = item_type
+        self.item_type = type
         for arg in kwargs:
             if "comment" in arg:
                 continue

@@ -114,7 +114,7 @@ class FavoredFoe(Feature):
         self.used_this_turn = False
 
 class BracersOfArchery(Feature):
-    name = "Bracers of Archery"
+    name = "Bracers Of Archery"
     def __init__(self):
         super().__init__(BracersOfArchery.name)
     def on_damage(self,attack):

@@ -16,6 +16,7 @@ class Attack(ABC):
             self.damage_mod = attacker.statblock.mods[item.ability]+item.damage_bonus
             if item.attack_type == "range":
                 self.range = True
+        S()
         # context-like modifiers
         self.extra_dice = []
         self.advantage = False
