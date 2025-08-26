@@ -1,7 +1,7 @@
 from core.attack import WeaponAttack
 from pdb import set_trace as S
 class Feature:
-    """Base class for all character features with auto-registry."""
+    """Base class for all character features with auto-registry and optional event subscription."""
     REGISTRY = {}
 
     def __init_subclass__(cls, **kwargs):
@@ -15,19 +15,50 @@ class Feature:
 
     def __init__(self, name=None):
         self.name = name or self.__class__.__name__
+        self.owner = None   # Creature this feature is attached to
 
-    # Hooks
+    # ---------------------------
+    # Attach/Detach to Creature
+    # ---------------------------
+    def attach(self, creature):
+        """Attach to a creature and subscribe to events if needed."""
+        self.owner = creature
+        self.subscribe(creature.eventManager)
+
+    def detach(self):
+        """Detach from creature and unsubscribe from events."""
+        if self.owner:
+            self.unsubscribe(self.owner.eventManager)
+            self.owner = None
+
+    def subscribe(self, event_manager):
+        """Override in subclasses to hook into creature events."""
+        # Default: wire event manager back into legacy hook methods
+        event_manager.subscribe("attack", self.on_attack)
+        event_manager.subscribe("damage", self.on_damage)
+        event_manager.subscribe("turn_start", self.on_turn_start)
+
+    def unsubscribe(self, event_manager):
+        """Unsubscribe from all events."""
+        event_manager.unsubscribe("attack", self.on_attack)
+        event_manager.unsubscribe("damage", self.on_damage)
+        event_manager.unsubscribe("turn_start", self.on_turn_start)
+
+    # ---------------------------
+    # Legacy Hook API
+    # ---------------------------
     def on_attack(self, attack):
-        """Called when attack roll happens."""
+        """Called when attack roll happens (default does nothing)."""
         pass
 
     def on_damage(self, attack):
-        """Called when damage is calculated."""
+        """Called when damage is calculated (default does nothing)."""
         pass
 
     def on_turn_start(self, context=None):
-        """Called at the start of the character's turn."""
+        """Called at the start of the character's turn (default does nothing)."""
         pass
+
 
 class Sharpshooter(Feature):
     name = "Sharpshooter"
@@ -115,7 +146,34 @@ class FavoredFoe(Feature):
 
 class BracersOfArchery(Feature):
     name = "Bracers Of Archery"
+
     def __init__(self):
         super().__init__(BracersOfArchery.name)
-    def on_damage(self,attack):
-        S()
+
+    def subscribe(self, event_manager):
+        """
+        Subscribe only to the events we care about.
+        In this case, damage resolution for ranged attacks.
+        """
+        event_manager.subscribe("AttackResolved", self.notify)
+
+    def unsubscribe(self, event_manager):
+        event_manager.unsubscribe("AttackResolved", self.notify)
+
+    def notify(self, data):
+        """
+        Called whenever an event we're subscribed to is broadcast.
+        Expects data dict with keys:
+          - 'attacker': Creature
+          - 'target': Creature
+          - 'weapon': str
+          - 'damage': int
+        """
+        # Only apply bonus if this creature is attacking
+        if data.get("attacker") != self.owner:
+            return
+
+        # Only for ranged weapon attacks
+        if data.get("weapon") == "ranged":
+            data["damage"] += 2
+            print(f"{self.owner.name}'s Bracers of Archery add +2 damage!")

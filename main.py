@@ -9,12 +9,13 @@ global FOLDER_PATH
 FOLDER_PATH= os.sep.join(os.path.abspath(__file__).split(os.sep)[:-1])
 from utils.loader import load_class_json
 from utils.load_item import load_item_json
-from core.player2 import PlayerCharacter
 from core.events import EventManager
 from data.monsters.monsters import *
+from core.InitiativeManager import InitiativeManager
 from data.features.features import *
 from utils.creatureFactory import CreatureFactory
 from utils.scenarioLoader import ScenarioLoader
+from utils.genericListener import Listener
 import json
 from pdb import set_trace as S
 
@@ -27,17 +28,18 @@ def load_json(filename):
 def main(args):
     event = EventManager()
     factory = CreatureFactory()
+    _ = Listener(event)
+
+    
     # Load scenario (could come from a .json file)
     scenario_data = load_json(args.json)
     loader = ScenarioLoader(factory, event)
     players, monsters = loader.load(scenario_data)
-    # Example combat start
-    brendiir = players[0]
-    print("Brendir has ",brendiir.inventory," in his inventory")
-    print("Brendiir's Features are ",brendiir.features)
-    goblin = monsters[0]
+    initiative = InitiativeManager(players+monsters, event)
+    initiative.roll_initiative()
+    initiative.start_combat()
 
-    brendiir.perform_attack(goblin, item=brendiir.get_item("Longbow+1"))
+    #brendiir.perform_attack(goblin, item=brendiir.get_item("Longbow+1"))
 if __name__ == "__main__":
     from argparse import ArgumentParser
     parser = ArgumentParser()

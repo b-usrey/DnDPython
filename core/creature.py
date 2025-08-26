@@ -46,6 +46,12 @@ class Creature:
                 print(f"{self.name} sees a total roll of {data['data']['attack_total']}")
             if data['target'].ID == self.ID:
                 print("Run away")
+        elif event_type == "TurnStarted" and data["creature"] == self:
+            print(f"{self.name} begins their turn in round {data['round']}.")
+        elif event_type == "TurnEnded" and data["creature"] == self:
+            print(f"{self.name} ends their turn.")
+        elif event_type == "RoundStarted":
+            print(f"{self.name} notices round {data['round']} has started.")
     def add_item(self,item):
         self.inventory.append(item)
     def _add_feature_by_name(self, name):
