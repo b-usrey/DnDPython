@@ -3,7 +3,7 @@ FOLDER_PATH= os.sep.join(os.path.abspath(__file__).split(os.sep)[:-1])
 from pdb import set_trace as S
 import math
 from core.creature import Creature
-from data.features.features import Feature
+from data.features.base import Feature
 import json
 FLAG_IS_OMNIPOTENT = True
 class PlayerCharacter(Creature):
@@ -22,6 +22,7 @@ class PlayerCharacter(Creature):
         self.update_items = False
         self.total_level = sum([cls[1] for cls in classes])
         self.prof_mod = (self.total_level-1)//4+2
+        self.classes = classes
         super().__init__(name, 0, 0,stats,event,proficiency=self.prof_mod)
         for feat in feats:
             self._add_feature_by_name(feat)
