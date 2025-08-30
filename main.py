@@ -9,7 +9,7 @@ global FOLDER_PATH
 FOLDER_PATH= os.sep.join(os.path.abspath(__file__).split(os.sep)[:-1])
 from utils.loader import load_class_json
 from utils.load_item import load_item_json
-from core.events import EventManager
+from core.events import EventBus
 from data.monsters.monsters import *
 from core.InitiativeManager import InitiativeManager
 from data.features.features import *
@@ -26,7 +26,7 @@ def load_json(filename):
     with open(os.path.join("scenarios", filename), "r") as f:
         return json.load(f)
 def main(args):
-    event = EventManager()
+    event = EventBus()
     factory = CreatureFactory()
     _ = Listener(event)
 
@@ -38,6 +38,8 @@ def main(args):
     initiative = InitiativeManager(players+monsters, event)
     initiative.roll_initiative()
     initiative.start_combat()
+    attack = players[0].perform_attack(monsters[0],item='Longbow+1')
+    print(attack.tags)
 
     #brendiir.perform_attack(goblin, item=brendiir.get_item("Longbow+1"))
 if __name__ == "__main__":

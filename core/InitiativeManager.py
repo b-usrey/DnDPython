@@ -23,9 +23,10 @@ class InitiativeManager:
         # Sort descending by roll
         self.initiative_order.sort(key=lambda x: x[0], reverse=True)
         self.current_index = 0
+        context = {"order":self.initiative_order}
 
         # Broadcast initiative order
-        self.eventManager.broadcast("InitiativeRolled", self.initiative_order)
+        self.eventManager.broadcast("InitiativeRolled", context)
 
     def current_creature(self):
         return self.initiative_order[self.current_index][1]
