@@ -3,6 +3,7 @@ from core.actionTracker import ActionTracker
 from core.statBlock import StatBlock
 from core.creature_observer import CreatureObserver
 from core.attack import WeaponAttack
+from core.item import Item
 from data.features.features import Feature
 import random
 import itertools
@@ -26,7 +27,7 @@ class Creature:
         self.proficiency = proficiency
         self.observer = CreatureObserver(self)
         self.event_manager = eventManager
-        self.event_manager.register(self)
+        self.event_manager.subscribe("*",self.observer)
         self.actions = ActionTracker()
         self.team = "red"
         self.inventory = []
@@ -35,6 +36,7 @@ class Creature:
         self.initiative_mod = 0
         self.initiative_advantage = False
         self.initiative_roll = None
+        self.features = []
     def get_item(self,itemName):
         for item in self.inventory:
             if item.name.lower() == itemName.lower():
@@ -46,17 +48,27 @@ class Creature:
                 print(f"{self.name} sees a total roll of {data['data']['attack_total']}")
             if data['target'].ID == self.ID:
                 print("Run away")
+        elif event_type == "TurnStarted" and data["creature"] == self:
+            print(f"{self.name} begins their turn in round {data['round']}.")
+        elif event_type == "TurnEnded" and data["creature"] == self:
+            print(f"{self.name} ends their turn.")
+        elif event_type == "RoundStarted":
+            print(f"{self.name} notices round {data['round']} has started.")
     def add_item(self,item):
         self.inventory.append(item)
     def _add_feature_by_name(self, name):
         """Helper to add a feature from the registry by name."""
         if name in Feature.REGISTRY:
+            if name == "sharpshooter":
+                S()
             feature_class = Feature.REGISTRY[name]
-            # Instantiate feature — if it needs args, you can pass them here
-            self.features.append(feature_class())
+            feature = feature_class()                     # create once
+            self.features.append(feature)                 # store it
+            feature.attach(self, self.event_manager)      # attach to creature + bus
         else:
             print(f"⚠ Feature {name} not found in registry, storing raw name")
-            self.features.append(name)  # fallback to string   
+            self.features.append(name)  # fallback to string
+ 
     def equip_item(self,item_name):
         item = next((i for i in self.inventory if i.name.lower() == item_name.lower()),None)
         if not item:
@@ -110,18 +122,18 @@ class Creature:
         self.actions.reset()
     def is_alive(self):
         return self.hp > 0 
+    def _get_item_by_name(self,itemName):
+        for item in self.equipped_items:
+            if item.name == itemName:
+                return item
+        print(f"Couldn't find {itemName} in equipped items")
+        return None
     def perform_attack(self,target,item=None):
+        if not isinstance(item,Item):
+            item = self._get_item_by_name(item)
         attack = WeaponAttack(self,target,"1d8",item=item)
-        for f in self.features:
-            if isinstance(f,Feature):
-                print(f.name," is being applied")
-                f.on_attack(attack)
-        attack.roll_to_hit()
-        attackData={"attacker":self,
-                    "target":target,
-                    "data":attack.result}
-        self.event_manager.broadcast("attack_rolled",attackData)
-        print(attack.result)
+        attack.declare_attack()
+        return attack
     def observe_attack(self, data):
         """Called whenever *any* creature attacks"""
         attacker = data["attacker"]

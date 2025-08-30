@@ -20,11 +20,11 @@ class PlayerCharacter(Creature):
         self.choices = choices
         self.hp = 0
         self.update_items = False
-        self.feats = feats
-        self.features = []
         self.total_level = sum([cls[1] for cls in classes])
         self.prof_mod = (self.total_level-1)//4+2
         super().__init__(name, 0, 0,stats,event,proficiency=self.prof_mod)
+        for feat in feats:
+            self._add_feature_by_name(feat)
         for idx,cls in enumerate(classes):
             subclass=None
             if cls[0] in subclasses:
@@ -56,7 +56,7 @@ class PlayerCharacter(Creature):
                         for opt in feat['options']:
                             if [class_name,lvl,feat['name'],opt] in self.choices:
                                 featName = opt
-                    self.features.append(self._add_feature_by_name(featName))
+                    self._add_feature_by_name(featName)
             if subclass_data and str(lvl) in subclass_data['features_by_level']:
                 choiceFound = False
                 for sub_feat in subclass_data['features_by_level'][str(lvl)]:
@@ -66,7 +66,7 @@ class PlayerCharacter(Creature):
                             if [sub_class,lvl,sub_feat['name'],opt] in self.choices:
                                 featName = opt
                                 choiceFound = True
-                    self.features.append(self._add_feature_by_name(featName))
+                    self._add_feature_by_name(featName)
         return class_data
 
     def add_item(self,item):

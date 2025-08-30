@@ -1,121 +1,125 @@
 from core.attack import WeaponAttack
+from core.events import EventBus
 from pdb import set_trace as S
 class Feature:
-    """Base class for all character features with auto-registry."""
     REGISTRY = {}
+    EVENT_MAP = {}  # event_name -> handler method name
 
     def __init_subclass__(cls, **kwargs):
-        """Automatically register subclasses when defined."""
         super().__init_subclass__(**kwargs)
-        # Register by class name (e.g. "Sharpshooter") 
-        # and by the 'name' attribute if it exists
-        if hasattr(cls, "name"):
-            Feature.REGISTRY[cls.name] = cls
-        Feature.REGISTRY[cls.__name__] = cls
+        Feature.REGISTRY[getattr(cls, "name", cls.__name__)] = cls
 
-    def __init__(self, name=None):
+    def __init__(self, owner=None, name=None):
         self.name = name or self.__class__.__name__
+        self.owner = owner
+        self.bus = None
+        self._subscriptions = []  # track (event, handler) for unsubscribe
 
-    # Hooks
-    def on_attack(self, attack):
-        """Called when attack roll happens."""
-        pass
+    def attach(self, owner, bus):
+        """Attach to a creature and subscribe to events."""
+        self.owner = owner
+        self.bus = bus
+        self.subscribe(bus)
 
-    def on_damage(self, attack):
-        """Called when damage is calculated."""
-        pass
+    def detach(self):
+        """Remove all subscriptions."""
+        if self.bus:
+            self.unsubscribe(self.bus)
+        self.owner = None
+        self.bus = None
 
-    def on_turn_start(self, context=None):
-        """Called at the start of the character's turn."""
-        pass
+    def subscribe(self, bus):
+        """Subscribe each handler in EVENT_MAP by passing the bound method."""
+        for event, handler_name in self.EVENT_MAP.items():
+            handler = getattr(self, handler_name, None)
+            if handler:
+                bus.subscribe(event, handler)       # pass method, not self
+                self._subscriptions.append((event, handler))
+
+    def unsubscribe(self, bus):
+        """Unsubscribe all stored handlers."""
+        for event, handler in self._subscriptions:
+            bus.unsubscribe(event, handler)
+        self._subscriptions.clear()
 
 class Sharpshooter(Feature):
     name = "Sharpshooter"
-
-    def __init__(self):
-        super().__init__(Sharpshooter.name)
-
-    def on_attack(self, attack):
+    EVENT_MAP = {"attack": "on_attack","damage":"on_damage"}
+    def on_attack(self, context):
+        attack = context['attack']
         if isinstance(attack, WeaponAttack):
             attack.to_hit_mod -= 5
             attack.damage_mod += 10
+            attack.tags.add("sharpshooter")
+
 class Archery(Feature):
     name = "Archery"
-    def __init__(self):
-        super().__init__(Archery.name)
-    def on_attack(self,attack):
-        if isinstance(attack,WeaponAttack):
+    EVENT_MAP = {"attack": "on_attack"}
+
+    def on_attack(self, context):
+        attack = context['attack']
+        if isinstance(attack, WeaponAttack):
             attack.to_hit_mod += 2
+            attack.tags.add("archery")
+            
 
 class DreadAmbusher(Feature):
     name = "Dread Ambusher"
+    EVENT_MAP = {"turn_start": "on_turn_start", "attack": "on_attack", "damage": "on_damage"}
+
     def __init__(self):
-        super().__init__(DreadAmbusher.name)
+        super().__init__()
         self.first_turn_active = True
         self.extra_attack_used = False
 
-    def on_turn_start(self, context):
-        # context could include { "creature": Creature, "turn_number": int }
-        creature = context.get("creature")
-        turn_number = context.get("turn_number")
-
-        if turn_number == 1:  # First turn only
+    def on_turn_start(self, ctx):
+        creature, turn = ctx["creature"], ctx["turn_number"]
+        if turn == 1:
             print(f"{creature.name} gains +10 movement from Dread Ambusher!")
             creature.speed += 10
-            self.first_turn_active = True
-            self.extra_attack_used = False
+            self.first_turn_active, self.extra_attack_used = True, False
         else:
             self.first_turn_active = False
 
     def on_attack(self, attack):
-        """
-        Triggered whenever the creature makes an attack.
-        Attack object could carry metadata like 'is_bonus_attack'.
-        """
-        if not isinstance(attack, WeaponAttack):
-            return
-
+        attack = attack['attack']
         if self.first_turn_active and not self.extra_attack_used:
-            # Flag this attack as the Dread Ambusher bonus attack
-            #attack.tags.add("dread_ambusher_bonus")
+            attack.tags.add("dread_ambusher_bonus")
             self.extra_attack_used = True
 
     def on_damage(self, attack):
-        """
-        Add 1d8 damage if the flagged bonus attack hits.
-        """
         if "dread_ambusher_bonus" in getattr(attack, "tags", []):
             if attack.result.get("hit", False):
                 print("Dread Ambusher adds +1d8 damage!")
-                attack.extra_damage_die.append((1, 8))     
+                attack.extra_damage_die.append((1, 8))
+
+
 class FavoredFoe(Feature):
-    name = "Favored Foe"
+    EVENT_MAP = {
+        "attack_roll": "on_attack_roll"
+    }
 
-    def __init__(self, diceType="d6"):
-        super().__init__(FavoredFoe.name)
-        self.diceType = diceType
-        self.used_this_turn = False
-        self.marked_target = None
+    def on_attack_roll(self, context):
+        if context["attacker"] == self.owner:
+            context["bonus"] += 2
+            print(f"{self.owner} applies Favored Foe! Bonus is now {context['bonus']}")
 
-    def mark_target(self, target):
-        self.marked_target = target
 
-    def on_damage(self, attack):
-        if (
-            attack.target == self.marked_target
-            and not self.used_this_turn
-            and attack.result.get("hit", False)
-        ):
-            # Append tuple: (num dice, die size)
-            attack.extra_damage_die.append((1, 6))
-            self.used_this_turn = True
-
-    def on_turn_start(self, context=None):
-        self.used_this_turn = False
 
 class BracersOfArchery(Feature):
     name = "Bracers Of Archery"
-    def __init__(self):
-        super().__init__(BracersOfArchery.name)
-    def on_damage(self,attack):
-        S()
+    EVENT_MAP = {"attack_resolved": "on_attack_resolved"}
+
+    def on_attack_resolved(self, data):
+        if data["attacker"] == self.owner and data.get("weapon") == "ranged":
+            data["damage"] += 2
+            print(f"{self.owner.name}'s Bracers add +2 damage!")
+
+class HellishRebuke(Feature):
+    name = "Hellish Rebuke"
+    EVENT_MAP = {"damage":"on_damage"}
+    def on_damage(self,data):
+        if data['target'] == self.owner and self.owner.actions.reactions:
+            self.owner.actions.use_reaction()
+        #if data['target'] == self.owner and self.owner.actions
+

@@ -14,13 +14,17 @@ class ScenarioLoader:
 
         # Load player characters
         for pdata in scenario_data.get("players", []):
+            features = []
+            if 'features' in pdata:
+                features = pdata['features']
             pc = PlayerCharacter(
                 pdata["name"],
                 pdata["classes"],
                 pdata["subclasses"],
                 pdata["stats"],
                 self.event,
-                pdata.get("choices", [])
+                pdata.get("choices", []),
+                feats=features
             )
             # Load and equip items
             for item_name in pdata.get("items", []):
