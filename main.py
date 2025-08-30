@@ -12,7 +12,7 @@ from utils.load_item import load_item_json
 from core.events import EventBus
 from data.monsters.monsters import *
 from core.InitiativeManager import InitiativeManager
-from data.features.features import *
+from data.features.base import *
 from utils.creatureFactory import CreatureFactory
 from utils.scenarioLoader import ScenarioLoader
 from utils.genericListener import Listener
@@ -45,6 +45,6 @@ def main(args):
 if __name__ == "__main__":
     from argparse import ArgumentParser
     parser = ArgumentParser()
-    parser.add_argument("--json",help="Path to scenario json you want to load")
+    parser.add_argument("--json",help="Name of scenario json you want to load")
     args = parser.parse_args()
     main(args)

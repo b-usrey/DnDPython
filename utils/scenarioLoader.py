@@ -1,5 +1,5 @@
 from core.player2 import PlayerCharacter
-from data.features.features import Feature
+from data.features.base import Feature
 from data.monsters.monsters import *
 from utils.load_item import load_item_json
 from pdb import set_trace as S

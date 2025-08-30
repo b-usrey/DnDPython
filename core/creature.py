@@ -4,7 +4,7 @@ from core.statBlock import StatBlock
 from core.creature_observer import CreatureObserver
 from core.attack import WeaponAttack
 from core.item import Item
-from data.features.features import Feature
+from data.features.base import Feature
 import random
 import itertools
 
@@ -37,6 +37,7 @@ class Creature:
         self.initiative_advantage = False
         self.initiative_roll = None
         self.features = []
+        self.concentration = None
     def get_item(self,itemName):
         for item in self.inventory:
             if item.name.lower() == itemName.lower():
