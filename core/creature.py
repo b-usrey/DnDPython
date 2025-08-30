@@ -36,6 +36,7 @@ class Creature:
         self.initiative_mod = 0
         self.initiative_advantage = False
         self.initiative_roll = None
+        self.features = []
     def get_item(self,itemName):
         for item in self.inventory:
             if item.name.lower() == itemName.lower():
@@ -131,20 +132,7 @@ class Creature:
         if not isinstance(item,Item):
             item = self._get_item_by_name(item)
         attack = WeaponAttack(self,target,"1d8",item=item)
-        attackData={"event_type":"attack",
-                    "attack":attack,
-                    "attacker":self,
-                    "target":target,
-                    }
-        self.event_manager.broadcast("attack",attackData)
-        attack.roll_to_hit()
-        
-        print(attack.result)
-        
-        print(attack.result)
-        if attack.result['hit']:
-            attack.roll_damage()
-            self.event_manager.broadcast("damage",attackData)
+        attack.declare_attack()
         return attack
     def observe_attack(self, data):
         """Called whenever *any* creature attacks"""

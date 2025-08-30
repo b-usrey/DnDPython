@@ -18,7 +18,7 @@ from utils.scenarioLoader import ScenarioLoader
 from utils.genericListener import Listener
 import json
 from pdb import set_trace as S
-
+VERBOSE = True
 def is_side_fighting(side):
     return True if True in [creature.is_alive() for creature in side] else False
 def load_json(filename):

@@ -20,7 +20,6 @@ class PlayerCharacter(Creature):
         self.choices = choices
         self.hp = 0
         self.update_items = False
-        self.features = []
         self.total_level = sum([cls[1] for cls in classes])
         self.prof_mod = (self.total_level-1)//4+2
         super().__init__(name, 0, 0,stats,event,proficiency=self.prof_mod)

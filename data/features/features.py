@@ -115,3 +115,11 @@ class BracersOfArchery(Feature):
             data["damage"] += 2
             print(f"{self.owner.name}'s Bracers add +2 damage!")
 
+class HellishRebuke(Feature):
+    name = "Hellish Rebuke"
+    EVENT_MAP = {"damage":"on_damage"}
+    def on_damage(self,data):
+        if data['target'] == self.owner and self.owner.actions.reactions:
+            self.owner.actions.use_reaction()
+        #if data['target'] == self.owner and self.owner.actions
+

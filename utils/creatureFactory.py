@@ -15,6 +15,9 @@ class CreatureFactory:
             proficiency=template.get("proficiency", 2),
             eventManager=observer,
         )
+        if 'features' in template:
+            for feat in template['features']:
+                creature._add_feature_by_name(feat)
         # Add attacks
         #for atk in template.get("attacks", []):
         #    creature.attacks.append(

@@ -8,7 +8,8 @@ GOBLIN = {
     "attacks": [
         {"name": "Scimitar", "attack_bonus": 4, "damage_die": 6, "damage_mod": 2},
         {"name": "Shortbow", "attack_bonus": 4, "damage_die": 6, "damage_mod": 2}
-    ]
+    ],
+    "features":["Hellish Rebuke"]
 }
 
 ORC = {

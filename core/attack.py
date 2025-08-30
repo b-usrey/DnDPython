@@ -1,6 +1,7 @@
 from abc import ABC, abstractmethod
 import random
 from pdb import set_trace as S
+VERBOSE = True
 
 class Attack(ABC):
     def __init__(self, attacker, target, base_dice,item=None,range=False):
@@ -30,8 +31,27 @@ class Attack(ABC):
     @abstractmethod
     def roll_damage(self):
         pass
+    
+    @abstractmethod
+    def declare_attack(self):
+        pass
 
 class WeaponAttack(Attack):
+    def declare_attack(self):
+        attackData={"event_type":"attack",
+                    "attack":self,
+                    "attacker":self.attacker,
+                    "target":self.target,
+                    }
+        self.attacker.event_manager.broadcast("attack",attackData)
+        results = self.roll_to_hit()
+        attackData['results'] = results
+        if self.result['hit']:
+            print(f"{self.attacker.name} hit {self.target.name}")
+            if VERBOSE:
+                print(self.result)
+            self.attacker.event_manager.broadcast("damage",attackData)
+            self.roll_damage()
     def roll_to_hit(self):
         d20 = random.randint(1, 20)
         if self.advantage:
@@ -44,7 +64,7 @@ class WeaponAttack(Attack):
         self.result["attack_total"] = total
         self.result["hit"] = total >= self.target.ac
 
-        return self.result["hit"]
+        return self.result
 
     def roll_damage(self):
         if not self.result.get("hit", False):
