@@ -39,7 +39,7 @@ def main(args):
     initiative.roll_initiative()
     initiative.start_combat()
     attack = players[0].perform_attack(monsters[0],item='Longbow+1')
-    print(attack.tags)
+    print(attack.tags,attack.to_hit_mod)
 
     #brendiir.perform_attack(goblin, item=brendiir.get_item("Longbow+1"))
 if __name__ == "__main__":

@@ -131,13 +131,16 @@ class Creature:
         if not isinstance(item,Item):
             item = self._get_item_by_name(item)
         attack = WeaponAttack(self,target,"1d8",item=item)
-        attack.roll_to_hit()
         attackData={"event_type":"attack",
                     "attack":attack,
                     "attacker":self,
                     "target":target,
-                    "data":attack.result}
+                    }
         self.event_manager.broadcast("attack",attackData)
+        attack.roll_to_hit()
+        
+        print(attack.result)
+        
         print(attack.result)
         if attack.result['hit']:
             attack.roll_damage()

@@ -63,7 +63,6 @@ class Archery(Feature):
             attack.tags.add("archery")
             
 
-
 class DreadAmbusher(Feature):
     name = "Dread Ambusher"
     EVENT_MAP = {"turn_start": "on_turn_start", "attack": "on_attack", "damage": "on_damage"}
