@@ -38,16 +38,16 @@ class FavoredFoe(Feature):
     def on_attack(self, data):
         if data["attacker"] == self.owner and (not self.owner.concentration or self.owner.concentration=="Favored Foe"): 
             attack = data['attack']
-            attack.tags.add("favored foe")
+            attack.tags.add("favored_foe")
             self.owner.concentration = "Favored Foe"
             #print(f"{self.owner} applies Favored Foe! Bonus is now {data['bonus']}")
     def on_damage(self,data):
-        if data["attacker"] == self.owner and 'favored foe' in data['attack'].tags:
+        if data["attacker"] == self.owner and 'favored_foe' in data['attack'].tags:
             rangerLevel = [cls[1] for cls in self.owner.classes if cls[0] == "Ranger"][0]
             extraDamage = "1d4"
             if rangerLevel >5:
                 extraDamage = "1d6"
             if rangerLevel > 13:
                 extraDamage = "1d8"
-            print(extraDamage)
+            print("Favored foe is applying ",extraDamage)
         

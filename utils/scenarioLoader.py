@@ -1,4 +1,4 @@
-from core.player2 import PlayerCharacter
+from core.player_character import PlayerCharacter
 from data.features.base import Feature
 from data.monsters.monsters import *
 from utils.load_item import load_item_json

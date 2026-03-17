@@ -28,9 +28,7 @@ def load_json(filename):
 def main(args):
     event = EventBus()
     factory = CreatureFactory()
-    _ = Listener(event)
-
-    
+    _ = Listener(event)    
     # Load scenario (could come from a .json file)
     scenario_data = load_json(args.json)
     loader = ScenarioLoader(factory, event)
