@@ -2,7 +2,7 @@ from core.player_character import PlayerCharacter
 from data.features.base import Feature
 from data.monsters.monsters import *
 from utils.load_item import load_item_json
-from pdb import set_trace as S
+
 class ScenarioLoader:
     def __init__(self, factory, event_manager):
         self.factory = factory
@@ -32,6 +32,10 @@ class ScenarioLoader:
                 pc.add_item(item)
             for eq_name in pdata.get("equipped", []):
                 pc.equip_item(eq_name)
+
+            # Sync AC from equipped armor and _max_hp from calculated hp
+            pc.get_best_ac()
+            pc._max_hp = int(pc._current_hp)
 
             # Extra features (like feats not tied to class/subclass)
             for fname in pdata.get("features", []):

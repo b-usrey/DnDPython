@@ -1,6 +1,6 @@
 import os
 FOLDER_PATH= os.sep.join(os.path.abspath(__file__).split(os.sep)[:-1])
-from pdb import set_trace as S
+
 import math
 from core.creature import Creature
 from data.features.base import Feature
@@ -17,14 +17,16 @@ class PlayerCharacter(Creature):
         choices: choies for character levels [("Ranger",2,"Fighting Style","Archery")]
         """
         self.attacks = []
+        self.feats = []
         self.choices = choices
         self.hp = 0
         self.update_items = False
         self.total_level = sum([cls[1] for cls in classes])
         self.prof_mod = (self.total_level-1)//4+2
         self.classes = classes
-        super().__init__(name, 0, 0,stats,event,proficiency=self.prof_mod)
+        super().__init__(name, 0, 0, stats, event_manager=event, proficiency=self.prof_mod)
         for feat in feats:
+            self.feats.append(feat)
             self._add_feature_by_name(feat)
         for idx,cls in enumerate(classes):
             subclass=None
@@ -32,6 +34,14 @@ class PlayerCharacter(Creature):
                 subclass = subclasses[cls[0]]
             class_data = self.get_class_features(cls[0],cls[1],os.path.join(FOLDER_PATH,"..","data","classes"),sub_class=subclass)
             self.hp += (class_data['hit_die']/2+1+self.statblock.mods['Con'])*cls[1]+class_data['hit_die']/2-1 if idx == 0 else 0
+            # Wire saving throw proficiencies from class data into statblock
+            for save_ability in class_data.get("saving_throws", []):
+                from core.saving_throw import normalise_ability
+                try:
+                    key = normalise_ability(save_ability)
+                    self.statblock.save_profs[key] = 1
+                except ValueError:
+                    pass
         self.team=team
         self.spells = {}
     
