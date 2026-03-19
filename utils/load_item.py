@@ -2,27 +2,30 @@ import os
 import json
 from core.item import Item
 
-from pdb import set_trace as S
-def load_json(file):
-    with open(file,"r") as f:
+_BASE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+def _load_json(relative_path):
+    full_path = os.path.join(_BASE, relative_path)
+    with open(full_path, "r") as f:
         return json.load(f)
+
 def load_item_json(item_name):
-    ITEM_DATA = load_json("data\items.json")
-    ENCHANTMENTS = load_json("data\enchantments.json")
+    ITEM_DATA = _load_json(os.path.join("data", "items.json"))
+    ENCHANTMENTS = _load_json(os.path.join("data", "enchantments.json"))
     base_name = item_name
-    enchantKey = None
+    enchant_key = None
     if "+" in item_name:
-        base_name,bonus = item_name.split("+",1)
+        base_name, bonus = item_name.split("+", 1)
         base_name = base_name.strip()
-        enchantKey = "+"+bonus.strip()
-    if base_name in ITEM_DATA:
-        data = ITEM_DATA[base_name]
-    else:
-        print(f"{item_name} not in data/items.json, go add it there")
-    if enchantKey:
-        data['name'] = base_name+enchantKey
-        if enchantKey not in ENCHANTMENTS:
-            raise ValueError(f"Unknown Enchantment: {enchantKey}")
-        for k,v in ENCHANTMENTS[enchantKey].items():
-            data[k] = data.get(k,0)+v            
+        enchant_key = "+" + bonus.strip()
+    if base_name not in ITEM_DATA:
+        print(f"'{item_name}' not found in data/items.json")
+        return None
+    data = dict(ITEM_DATA[base_name])
+    if enchant_key:
+        data["name"] = base_name + enchant_key
+        if enchant_key not in ENCHANTMENTS:
+            raise ValueError(f"Unknown enchantment: {enchant_key}")
+        for k, v in ENCHANTMENTS[enchant_key].items():
+            data[k] = data.get(k, 0) + v
     return Item(**data)

@@ -1,5 +1,15 @@
 {
   "name": "Brendiir vs Goblins",
+  "map": {
+    "width": 20,
+    "height": 16,
+    "walls": [[9, 0, 1, 7], [9, 9, 1, 7]],
+    "difficult_terrain": [[12, 5, 4, 4]]
+  },
+  "positions": {
+    "Brendiir": [3, 7],
+    "monsters": [[14, 5], [14, 10]]
+  },
   "players": [
     {
       "name": "Brendiir",
@@ -7,12 +17,12 @@
       "subclasses": {"Ranger": "Gloomstalker"},
       "stats": {"Str": 10, "Dex": 20, "Con": 14, "Int": 9, "Wis": 16, "Cha": 8},
       "choices": [["Ranger", 2, "Fighting Style", "Archery"]],
-      "items": ["Longbow+1", "Studded Leather+1", "Bracers Of Archery"],
-      "equipped": ["Longbow+1", "Studded Leather+1", "Bracers Of Archery"],
+      "items": ["Longbow+1", "Studded Leather+1", "Bracers Of Archery", "Ring of Protection"],
+      "equipped": ["Longbow+1", "Studded Leather+1", "Bracers Of Archery", "Ring of Protection"],
       "features": ["Sharpshooter"]
     }
   ],
   "monsters": [
-    {"type": "GOBLIN", "count": 2}
+    {"type": "GOBLIN", "count": 5, "weapon_role":"melee"}
   ]
 }

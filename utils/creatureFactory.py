@@ -1,30 +1,40 @@
+from collections import defaultdict
 from core.creature import Creature
-from core.attack import Attack
-from pdb import set_trace as S
+
+
 class CreatureFactory:
     def __init__(self):
-        # Keep track of all spawned creatures
         self.registry = {}
+        # Per-species counter so Goblin -> Goblin#1, Goblin#2, etc.
+        self._species_counters = defaultdict(int)
 
     def create(self, template, observer):
+        base_name = template["name"]
+        self._species_counters[base_name] += 1
+        unique_name = f"{base_name}#{self._species_counters[base_name]}"
+
         creature = Creature(
-            name=template["name"],
+            name=unique_name,
             hp=template["hp"],
             ac=template["ac"],
             stats=template["stats"],
             proficiency=template.get("proficiency", 2),
-            eventManager=observer,
+            event_manager=observer,
         )
-        if 'features' in template:
-            for feat in template['features']:
-                creature._add_feature_by_name(feat)
-        # Add attacks
-        #for atk in template.get("attacks", []):
-        #    creature.attacks.append(
-        #        Attack(atk["name"], atk["attack_bonus"], atk["damage_die"], atk.get("damage_mod", 0))
-        #    )
 
-        # Register creature by unique ID
+        # Wire saving throw proficiencies
+        from core.saving_throw import normalise_ability
+        for save_ability in template.get("save_proficiencies", []):
+            try:
+                key = normalise_ability(save_ability)
+                creature.statblock.save_profs[key] = 1
+            except ValueError:
+                pass
+
+        if "features" in template:
+            for feat in template["features"]:
+                creature._add_feature_by_name(feat)
+
         self.registry[creature.ID] = creature
         return creature
 
@@ -32,10 +42,8 @@ class CreatureFactory:
         return self.registry.get(creature_id, None)
 
     def get_by_name(self, name):
-        # Returns list of creatures matching that name
         return [c for c in self.registry.values() if c.name == name]
 
     def remove(self, creature):
-        # Optional: remove creature when it dies
-        if creature.id in self.registry:
-            del self.registry[creature.id]
+        if creature.ID in self.registry:
+            del self.registry[creature.ID]
