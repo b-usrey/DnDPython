@@ -1,33 +1,105 @@
 {
-  "name": "Fighter",
+  "class_name": "Fighter",
   "hit_die": 10,
-  "saving_throws": ["STR", "CON"],
-
-  "proficiencies": {
-    "armor": ["all", "shields"],
-    "weapons": ["simple", "martial"],
-    "tools": [],
-    "skills_choose": {
-      "count": 2,
-      "options": ["Acrobatics", "Animal Handling", "Athletics", "History", "Insight", "Intimidation", "Perception", "Survival"]
-    }
-  },
-
-  "multiclass_proficiencies": {
-    "armor": ["light"],
-    "weapons": ["simple"],
-    "tools": []
-  },
-
-  "features": [
-    { "level": 1, "name": "Fighting Style", "description": "Choose one fighting style." },
-    { "level": 1, "name": "Second Wind", "description": "Regain HP once per rest." },
-    { "level": 2, "name": "Action Surge", "description": "Take one additional action." }
-  ],
-
-  "subclasses": {
-    "Champion": [
-      { "level": 3, "name": "Improved Critical", "description": "Crit on 19–20." }
+  "primary_abilities": ["Strength", "Dexterity"],
+  "saving_throws": ["Strength", "Constitution"],
+  "armor_proficiencies": ["all", "shields"],
+  "weapon_proficiencies": ["simple", "martial"],
+  "tool_proficiencies": [],
+  "skill_choices": {
+    "choose": 2,
+    "options": [
+      "Acrobatics", "Animal Handling", "Athletics", "History",
+      "Insight", "Intimidation", "Perception", "Survival"
     ]
+  },
+  "multiclassing": {
+    "requirements": { "Strength": 13, "Dexterity": 13 },
+    "armor_proficiencies": ["light", "medium", "shields"],
+    "weapon_proficiencies": ["simple", "martial"]
+  },
+  "features_by_level": {
+    "1": [
+      {
+        "name": "Fighting Style",
+        "options": ["Archery", "Defense", "Dueling", "Great Weapon Fighting",
+                    "Protection", "Two-Weapon Fighting", "Blind Fighting",
+                    "Interception", "Superior Technique", "Thrown Weapon Fighting",
+                    "Unarmed Fighting"]
+      },
+      { "name": "Second Wind" }
+    ],
+    "2": [
+      { "name": "Action Surge" }
+    ],
+    "4": [
+      { "name": "ASI", "description": "Ability Score Improvement or Feat." }
+    ],
+    "5": [
+      { "name": "Extra Attack" }
+    ],
+    "6": [
+      { "name": "ASI", "description": "Ability Score Improvement or Feat." }
+    ],
+    "8": [
+      { "name": "ASI", "description": "Ability Score Improvement or Feat." }
+    ],
+    "9": [
+      { "name": "Indomitable" }
+    ],
+    "11": [
+      { "name": "Extra Attack II" }
+    ],
+    "12": [
+      { "name": "ASI", "description": "Ability Score Improvement or Feat." }
+    ],
+    "13": [
+      { "name": "Indomitable II", "description": "Indomitable upgrades to 2 uses — handled by Indomitable on attach." }
+    ],
+    "14": [
+      { "name": "ASI", "description": "Ability Score Improvement or Feat." }
+    ],
+    "16": [
+      { "name": "ASI", "description": "Ability Score Improvement or Feat." }
+    ],
+    "17": [
+      { "name": "Action Surge II" },
+      { "name": "Indomitable III", "description": "Indomitable upgrades to 3 uses — handled by Indomitable on attach." }
+    ],
+    "19": [
+      { "name": "ASI", "description": "Ability Score Improvement or Feat." }
+    ],
+    "20": [
+      { "name": "Extra Attack III" }
+    ]
+  },
+  "subclasses": {
+    "champion": {
+      "features_by_level": {
+        "3": [
+          { "name": "Improved Critical" }
+        ],
+        "7": [
+          {
+            "name": "Remarkable Athlete",
+            "description": "Add half proficiency (rounded up) to STR/DEX/CON checks not already proficient. Non-combat jump bonus."
+          }
+        ],
+        "10": [
+          {
+            "name": "Fighting Style",
+            "description": "Choose an additional Fighting Style.",
+            "options": ["Archery", "Defense", "Dueling", "Great Weapon Fighting",
+                        "Protection", "Two-Weapon Fighting", "Blind Fighting"]
+          }
+        ],
+        "15": [
+          { "name": "Superior Critical" }
+        ],
+        "18": [
+          { "name": "Survivor" }
+        ]
+      }
+    }
   }
 }

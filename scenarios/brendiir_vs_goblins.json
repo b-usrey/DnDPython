@@ -13,16 +13,33 @@
   "players": [
     {
       "name": "Brendiir",
-      "classes": [["Ranger", 8]],
+      "classes": [["Ranger", 5]],
       "subclasses": {"Ranger": "Gloomstalker"},
       "stats": {"Str": 10, "Dex": 20, "Con": 14, "Int": 9, "Wis": 16, "Cha": 8},
       "choices": [["Ranger", 2, "Fighting Style", "Archery"]],
-      "items": ["Longbow+1", "Studded Leather+1", "Bracers Of Archery", "Ring of Protection"],
-      "equipped": ["Longbow+1", "Studded Leather+1", "Bracers Of Archery", "Ring of Protection"],
+      "items": ["Longbow+2", "Studded Leather+1", "Bracers Of Archery", "Ring of Protection","Cloak of Protection"],
+      "equipped": ["Longbow+2", "Studded Leather+1", "Bracers Of Archery", "Ring of Protection","Cloak of Protection"],
       "features": ["Sharpshooter"]
+    },{
+      "name":"Thando",
+      "classes":[["Fighter",5]],
+      "subclasses":{"Fighter":"Champion"},
+      "stats":{"Str": 14,"Dex":19,"Con":14,"Int":8,"Wis":12,"Cha":10},
+      "choices":[["Fighter",2,"Fighting Style","Two-Weapon Fighting"]],
+      "items": ["Greatsword","Chain Mail"],
+      "equipped": ["Greatsword","Chain Mail"],
+      "features":["Mobile","Dual Wielder","Resilient"]
     }
   ],
   "monsters": [
-    {"type": "GOBLIN", "count": 5, "weapon_role":"melee"}
+    {
+     "type": "GOBLIN",
+     "count": 10,
+     "weapon_role":"melee"
+    },
+    {
+      "type":"ORC",
+      "count":2
+    }
   ]
 }

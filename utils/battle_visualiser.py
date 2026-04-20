@@ -421,8 +421,12 @@ class BattleVisualiser:
 
     def _write_video(self) -> None:
         """
-        Write all captured frames to self.video_path as an MP4.
-        Each frame is held for self.frame_duration seconds.
+        Write captured frames to self.video_path as MP4, with a GIF fallback.
+
+        Uses imageio.get_writer() for MP4 so the call is stable across
+        imageio v2 and v3 (mimsave had several breaking kwarg changes
+        between versions: macro_block_size removed in v3, GIF fps= changed
+        to duration= in ms).  get_writer() avoids all of those.
         """
         import imageio
 
@@ -432,41 +436,60 @@ class BattleVisualiser:
 
         fps = max(1, round(1.0 / self.frame_duration))
 
-        # imageio needs all frames the same shape — pad if needed
+        # Pad all frames to the same shape.  Also round width and height up
+        # to even numbers: libx264 hard-fails on odd dimensions.
         h = max(f.shape[0] for f in self._frames)
         w = max(f.shape[1] for f in self._frames)
+        h += h % 2
+        w += w % 2
         padded = []
         for frame in self._frames:
             fh, fw = frame.shape[:2]
-            if fh < h or fw < w:
+            if fh != h or fw != w:
                 canvas = np.full((h, w, 3), 28, dtype=np.uint8)  # FIG_BG ≈ #1c1812
                 canvas[:fh, :fw] = frame
                 padded.append(canvas)
             else:
                 padded.append(frame)
 
-        # Each frame repeated to fill its duration at the chosen fps
+        # Repeat each frame so it fills its display duration at the chosen fps.
         repeats = max(1, round(self.frame_duration * fps))
         expanded = []
         for frame in padded:
             expanded.extend([frame] * repeats)
 
         out_path = self.video_path
+
+        # ── MP4 via get_writer (stable across imageio v2 + v3) ─────────────────
+        # format="ffmpeg" must be explicit — without it imageio v2 can
+        # select the TIFF plugin for .mp4 files and then fail because
+        # TiffWriter does not accept fps=.
         try:
-            imageio.mimsave(out_path, expanded, fps=fps, macro_block_size=None)
+            with imageio.get_writer(out_path, format="ffmpeg", fps=fps) as writer:
+                for frame in expanded:
+                    writer.append_data(frame)
             abs_path = os.path.abspath(out_path)
             print(f"\n[Visualiser] Video saved → {abs_path}")
             print(f"             {len(self._frames)} frames × "
                   f"{self.frame_duration}s  ({fps} fps, "
                   f"{self.frame_duration * len(self._frames):.1f}s total)")
-        except Exception as e:
-            # Fallback: save as GIF
-            gif_path = os.path.splitext(out_path)[0] + ".gif"
-            try:
+            return
+        except Exception as mp4_err:
+            print(f"\n[Visualiser] MP4 failed ({mp4_err}), trying GIF fallback...")
+
+        # ── GIF fallback ──────────────────────────────────────────────────
+        # imageio v2 mimsave: fps= keyword
+        # imageio v3 mimsave: duration= keyword (milliseconds per frame)
+        gif_path = os.path.splitext(out_path)[0] + ".gif"
+        try:
+            imageio_major = int(imageio.__version__.split(".")[0])
+            if imageio_major >= 3:
+                imageio.mimsave(gif_path, expanded, duration=int(1000 / fps))
+            else:
                 imageio.mimsave(gif_path, expanded, fps=fps)
-                print(f"\n[Visualiser] MP4 failed ({e}), GIF saved → {gif_path}")
-            except Exception as e2:
-                print(f"\n[Visualiser] Video export failed: {e2}")
+            print(f"[Visualiser] GIF saved → {os.path.abspath(gif_path)}")
+        except Exception as gif_err:
+            print(f"[Visualiser] Video export failed entirely: {gif_err}")
 
     # ------------------------------------------------------------------
     # Map drawing
