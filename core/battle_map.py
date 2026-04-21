@@ -317,14 +317,10 @@ class BattleMap:
     def movement_cost_to(self, creature: Creature, col: int, row: int) -> int:
         """
         Return the movement cost in feet to step into (col, row).
-        Creatures with ignore_difficult_terrain (Land's Stride) treat
-        difficult terrain as normal cost.
+        Used by callers to track remaining speed during a turn.
         """
         self._check_bounds(col, row)
-        cost = self._grid[row][col].movement_cost
-        if cost > self.SQUARE_SIZE and getattr(creature, "ignore_difficult_terrain", False):
-            cost = self.SQUARE_SIZE
-        return cost
+        return self._grid[row][col].movement_cost
 
     def get_threatened_squares(
         self, creature: Creature, reach: int | None = None

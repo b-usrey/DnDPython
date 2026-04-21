@@ -1,78 +1,40 @@
 {
-  "Longbow": {
-    "name": "Longbow",
-    "type": "weapon",
-    "damage_die": "1d8",
-    "damageType": "piercing",
-    "ability": "Dex",
-    "weapon_type": "martial",
-    "attack_type": "range",
-    "normal_range": 150,
-    "long_range": 600,
-    "attack_bonus": 0,
-    "damage_bonus": 0,
-    "properties": [
-      "two-handed",
-      "heavy",
-      "ammunition"
-    ]
-  },
-  "Studded Leather": {
-    "name": "Studded Leather",
-    "type": "armor",
-    "base_ac": 12,
-    "armor_type": "light",
-    "magic_bonus": 0,
-    "Description": "Studded Leather Armor"
-  },
-  "Bracers Of Archery": {
-    "name": "Bracers Of Archery",
-    "type": "trinket",
-    "item_slot": "Bracers",
-    "required_attunement": "True",
-    "feature": "BracersOfArchery",
-    "description": "A ranged weapon, 150/600 ft."
-  },
-  "Ring of Protection": {
-    "name": "Ring of Protection",
-    "type": "trinket",
-    "item_slot": "Ring",
-    "required_attunement": "True",
-    "feature": "Ring Of Protection",
-    "description": "+1 bonus to AC and saving throws while attuned."
-  },
-  "Greatsword": {
-    "name": "Greatsword",
-    "type": "weapon",
-    "damage_die": "2d6",
-    "damageType": "slashing",
-    "ability": "Str",
-    "weapon_type": "martial",
-    "attack_type": "melee",
-    "normal_range": 5,
-    "long_range": 5,
-    "attack_bonus": 0,
-    "damage_bonus": 0,
-    "properties": [
-      "two-handed",
-      "heavy"
-    ]
-  },
-  "Chain Mail": {
-    "name": "Chain Mail",
-    "type": "armor",
-    "base_ac": 16,
-    "armor_type": "heavy",
-    "magic_bonus": 0,
-    "Description": "Heavy armour, no DEX bonus"
-  },
-    "Cloak of Protection": {
-        "name": "Cloak of Protection",
+    "Longbow": {
+        "name": "Longbow",
+        "type": "weapon",
+        "damage_die": "1d8",
+        "damageType": "piercing",
+        "ability": "Dex",
+        "weapon_type": "martial",
+        "attack_type": "range",
+        "normal_range": 150,
+        "long_range": 600,
+        "attack_bonus": 0,
+        "damage_bonus": 0,
+        "properties": ["two-handed", "heavy", "ammunition"]
+    },
+    "Studded Leather": {
+        "name": "Studded Leather",
+        "type": "armor",
+        "base_ac": 12,
+        "armor_type": "light",
+        "magic_bonus": 0,
+        "Description": "Studded Leather Armor"
+    },
+    "Bracers Of Archery": {
+        "name": "Bracers Of Archery",
+        "type": "trinket",
+        "item_slot": "Bracers",
+        "required_attunement": "True",
+        "feature": "BracersOfArchery",
+        "description": "A ranged weapon, 150/600 ft."
+    },
+    "Ring of Protection": {
+        "name": "Ring of Protection",
         "type": "trinket",
         "item_slot": "Ring",
         "required_attunement": "True",
-        "feature": "CloakOfProtection",
-        "ac_bonus": 1,
+        "feature": "RingOfProtection",
         "description": "+1 bonus to AC and saving throws while attuned"
     }
 }

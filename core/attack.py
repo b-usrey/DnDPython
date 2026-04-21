@@ -19,15 +19,10 @@ class Attack(ABC):
             self.damage_mod = attacker.statblock.mods[item.ability] + item.damage_bonus
             if item.attack_type == "range":
                 self.range = True
-        self.extra_dice     = []
-        self.advantage      = False
-        self.disadvantage   = False
-        self.critical       = False
-        # Improved/Superior Critical sets this lower on the attacker;
-        # roll_to_hit reads it from the attacker so features don't need
-        # to hook every attack individually.
-        self.crit_threshold = getattr(attacker, "crit_threshold", 20)
-        self.result         = {}
+        self.extra_dice = []
+        self.advantage  = False
+        self.critical   = False
+        self.result     = {}
 
     @abstractmethod
     def roll_to_hit(self): pass
@@ -77,63 +72,34 @@ class WeaponAttack(Attack):
             "target":     self.target,
         }
 
-        # ── Phase 1: announce attack ───────────────────────────────────
+        # Phase 1 — announce attack (features may modify to_hit_mod, add tags, etc.)
         self.attacker.event_manager.broadcast("attack", attack_data)
         self.roll_to_hit()
         attack_data["results"] = self.result
 
         if self.result["hit"]:
             print(f"{self.attacker.name} hit {self.target.name}  "
-                  f"(roll {self.result['hit_roll']} + mod = "
-                  f"{self.result['attack_total']} vs AC {self.target.ac})")
-
-            # ── Phase 2: hit confirmed ─────────────────────────────────
-            # Add extra_dice here — they are rolled in Phase 3's roll_damage()
-            # A reaction like Shield can set result["hit"] = False here to
-            # retroactively cancel the hit before damage is applied.
-            self.attacker.event_manager.broadcast("hit", attack_data)
-
-            if not self.result["hit"]:
-                # Hit was cancelled by a reaction (e.g. Shield spell)
-                print(f"  {self.target.name}'s reaction turned the hit into a miss!")
-                self.attacker.event_manager.broadcast("attack_resolved", attack_data)
-                return
-
-            # ── Phase 3: roll and apply damage ────────────────────────
+                  f"(roll {self.result['hit_roll']} + mod = {self.result['attack_total']} vs AC {self.target.ac})")
+            # Phase 2 — damage modifiers (features may add extra_dice, etc.)
             self.attacker.event_manager.broadcast("damage", attack_data)
-
-            # ── Phase 4: damage has landed — reactions fire here ──────
-            self.attacker.event_manager.broadcast("damage_dealt", attack_data)
-
+            # Phase 3 — roll and apply damage (target._on_damage_event fires here)
+            self.roll_damage()
         else:
             print(f"{self.attacker.name} missed {self.target.name}  "
-                  f"(roll {self.result['hit_roll']} + mod = "
-                  f"{self.result['attack_total']} vs AC {self.target.ac})")
+                  f"(roll {self.result['hit_roll']} + mod = {self.result['attack_total']} vs AC {self.target.ac})")
 
-        # ── Phase 5: full resolution ───────────────────────────────────
+        # Phase 4 — attack fully resolved, reactions fire here.
         self.attacker.event_manager.broadcast("attack_resolved", attack_data)
 
     def roll_to_hit(self):
-        # Advantage and disadvantage cancel each other out
-        adv  = self.advantage and not self.disadvantage
-        disadv = self.disadvantage and not self.advantage
-
-        roll1 = random.randint(1, 20)
-        if adv:
-            roll2 = random.randint(1, 20)
-            d20   = max(roll1, roll2)
-        elif disadv:
-            roll2 = random.randint(1, 20)
-            d20   = min(roll1, roll2)
-        else:
-            d20 = roll1
-
+        d20 = random.randint(1, 20)
+        if self.advantage:
+            d20 = max(random.randint(1, 20), d20)
         total          = d20 + self.to_hit_mod
-        self.critical  = (d20 >= self.crit_threshold)
+        self.critical  = (d20 == 20)
         self.result["hit_roll"]      = d20
         self.result["attack_total"]  = total
-        # A critical hit always hits regardless of AC
-        self.result["hit"]           = (total >= self.target.ac) or self.critical
+        self.result["hit"]           = total >= self.target.ac
         return self.result
 
     def roll_damage(self):

@@ -297,32 +297,10 @@ class CombatManager:
             print(f"  {creature.name} uses Dash "
                   f"(speed {effective_speed}ft this turn)")
 
-        # Walk path step by step — each square charged individually
-        # so difficult terrain, OAs, and trail waypoints are all correct.
-        # Print a single summary line rather than one line per square.
-        remaining = effective_speed
-        first_pos = self.battle_map.get_position(creature)
-        steps_taken = 0
-        for step in decision.path:
-            cost = self._try_move(creature, step[0], step[1], remaining,
-                                  silent=True)
-            if cost is None:
-                break
-            remaining   -= cost
-            steps_taken += 1
-
-        if steps_taken:
-            end_pos = self.battle_map.get_position(creature)
-            ft_used = effective_speed - remaining
-            print(f"  {creature.name} moves "
-                  f"({first_pos[0]},{first_pos[1]}) → "
-                  f"({end_pos[0]},{end_pos[1]})  [{ft_used}ft]")
-
-        # Dodge — spend action to impose disadvantage on incoming attacks
-        # until the start of this creature's next turn.
-        if getattr(decision, "use_dodge", False) and creature.actions.use_action():
-            creature.add_condition("dodging")
-            print(f"  {creature.name} takes the Dodge action.")
+        # Move
+        if decision.move_to:
+            self._try_move(creature, decision.move_to[0], decision.move_to[1],
+                           effective_speed)
 
         # Attack — fire main attack, extra attacks, then Action Surge if available
         if decision.target and decision.weapon and creature.actions.use_action():
@@ -332,20 +310,9 @@ class CombatManager:
                 enemies = self.battle_map.enemies_of(creature)
                 if not enemies:
                     break
-                # Only surge if at least one enemy is actually in range.
-                # Spending Action Surge when nothing is reachable wastes the
-                # charge — Action Surge recovers on a short rest, not each turn.
-                surge_target = min(enemies, key=lambda e: e.hp)
-                in_range = self.battle_map.check_attack_range(
-                    creature, surge_target,
-                    is_ranged=decision.weapon.is_ranged,
-                    normal_range=decision.weapon.normal_range,
-                    long_range=decision.weapon.long_range,
-                )
-                if not in_range:
-                    break
                 creature.actions.use_action_surge()
                 print(f"  {creature.name} uses Action Surge!")
+                surge_target = min(enemies, key=lambda e: e.hp)
                 self._do_attack_action(creature, surge_target, decision.weapon)
         elif not decision.target:
             print(f"  {creature.name} found no target.")
@@ -355,33 +322,32 @@ class CombatManager:
     # ------------------------------------------------------------------
 
     def _try_move(
-        self, creature, col: int, row: int, remaining_movement: int,
-        silent: bool = False,
+        self, creature, col: int, row: int, remaining_movement: int
     ) -> int | None:
         """
         Attempt to move creature to (col, row).
-        silent=True suppresses the per-step "moves to" print but OA messages
-        still print. Returns movement cost spent, or None if move failed.
+        Checks movement cost against remaining_movement.
+        Handles opportunity attack broadcasts.
+        Returns the movement cost spent, or None if move failed.
         """
         try:
             cost = self.battle_map.movement_cost_to(creature, col, row)
         except ValueError as e:
-            if not silent:
-                print(f"  Cannot move: {e}")
+            print(f"  Cannot move: {e}")
             return None
 
         if cost > remaining_movement:
+            print(f"  Not enough movement "
+                  f"(need {cost}ft, have {remaining_movement}ft)")
             return None
 
         try:
             oa_targets = self.battle_map.move_creature(creature, col, row)
         except ValueError as e:
-            if not silent:
-                print(f"  Cannot move: {e}")
+            print(f"  Cannot move: {e}")
             return None
 
-        if not silent:
-            print(f"  {creature.name} moves to ({col}, {row})")
+        print(f"  {creature.name} moves to ({col}, {row})")
 
         # Trigger opportunity attacks BEFORE committing position so the
         # attacker is still adjacent for the range check.

@@ -82,54 +82,26 @@ class PlayerCharacter(Creature):
 
     def add_item(self,item):
         self.inventory.append(item)
-    # ------------------------------------------------------------------
-    # AC calculation
-    # ------------------------------------------------------------------
-    #
-    def setup_ac(self) -> None:
-        """
-        Called once at combat setup (by ScenarioLoader after equipping).
-        Reads equipped body armour and shield; stores their AC contributions
-        in _armour_ac and _shield_ac. Does not touch _misc_ac so bonuses
-        from features that attached before this call (Ring of Protection, etc.)
-        are preserved. compute_ac/apply_misc_ac/apply_shield are inherited
-        from Creature.
-        """
+    def get_best_ac(self):
+        armors=[item for item in self.inventory if item.item_type == "armor"]
         self.dex_ac_cap = 2 if "medium armor master" not in self.feats else 3
-
-        # Reset armour and shield — keep existing _misc_ac
-        self._armour_ac = 10 + self.statblock.mods["Dex"]  # unarmoured baseline
-        self._shield_ac = 0
-
-        best_armour = None
-
-        for item in self.equipped_items:
-            if item.item_type != "armor":
-                continue
-
-            magic      = getattr(item, "magic_bonus", 0) + getattr(item, "ac_bonus", 0)
-            armor_type = getattr(item, "armor_type", "")
-
-            if armor_type == "shield":
-                self._shield_ac = getattr(item, "base_ac", 2) + magic
-                continue
-
-            if armor_type == "light":
-                dex_mod = self.statblock.mods["Dex"]
-            elif armor_type == "medium":
-                dex_mod = min(self.dex_ac_cap, self.statblock.mods["Dex"])
-            else:
-                dex_mod = 0   # heavy armour
-
-            candidate = getattr(item, "base_ac", 10) + dex_mod + magic
-            if candidate > self._armour_ac:
-                self._armour_ac = candidate
-                best_armour     = item
-
-        self.compute_ac()
-        if best_armour:
-            print(f"  {self.name}: {best_armour.name} → AC {self.ac}")
-
+        newArmor = None
+        shieldMod = 0
+        for armor in armors:
+            acMod = 0
+            if armor.armor_type == "shield":
+                shieldMod = armor.base_ac+armor.magic_bonus
+            if armor.armor_type == "light":
+                acMod = self.statblock.mods['Dex']
+            if armor.armor_type == "medium":
+                acMod = min(self.dex_ac_cap,self.statblock.mods['Dex'])    
+            ac = armor.base_ac+acMod+armor.magic_bonus
+            if ac > self.ac:
+                newArmor = armor
+                self.ac = ac
+        self.ac += shieldMod
+        if newArmor:
+            print(f"{self.name} is now using {newArmor.name} armor")
     def get_attack(self,target=None):
         targetAC = 10
         for attackOption in self.attacks:

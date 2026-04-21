@@ -61,7 +61,6 @@ class SaveResult:
     success:       bool
     damage_dealt:  int = 0
     damage_type:   str = ""
-    on_save:       object = None   # DamageOnSave value — used by Indomitable to reverse damage
     notes:         list = field(default_factory=list)
 
     def __str__(self):
@@ -197,7 +196,6 @@ class SavingThrow:
             success      = success,
             damage_dealt = damage_dealt,
             damage_type  = damage_type,
-            on_save      = on_save,
             notes        = notes,
         )
 

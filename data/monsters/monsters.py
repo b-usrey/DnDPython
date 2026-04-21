@@ -24,7 +24,7 @@ GOBLIN = {
             "long_range": 320,
         },
     ],
-    "features": ["Hellish Rebuke"]#,"Shield"],
+    "features": ["Hellish Rebuke"],
 }
 
 ORC = {

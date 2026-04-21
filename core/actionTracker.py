@@ -18,37 +18,16 @@ class ActionTracker:
         self.extra_attacks       = extra_attacks
         self.max_action_surges   = action_surges
         self.legendary_actions   = legendary_actions
-        self._full_reset()
+        self.reset()
 
     def reset(self):
-        """Called at the start of each turn.
-
-        Resets per-turn resources only.  Action Surge charges are a
-        rest resource — they are NOT reset here.  Call short_rest() or
-        long_rest() to recover them.
-        """
+        """Called at the start of each turn."""
         self.actions                  = self.max_actions
         self.bonus_actions            = self.max_bonus_actions
         self.reactions                = self.max_reactions
         self.remaining_extra_attacks  = self.extra_attacks
-        # remaining_surges intentionally NOT reset here — Action Surge
-        # recovers on a short or long rest, not at the start of each turn.
+        self.remaining_surges         = self.max_action_surges
         self.remaining_legendary      = self.legendary_actions
-
-    def _full_reset(self):
-        """Reset everything including rest-gated resources. Used by __init__
-        to set the initial state before any combat has happened.
-        """
-        self.reset()
-        self.remaining_surges = self.max_action_surges
-
-    def short_rest(self):
-        """Recover Action Surge charges (and other short-rest resources)."""
-        self.remaining_surges = self.max_action_surges
-
-    def long_rest(self):
-        """Recover all resources including those gated on a long rest."""
-        self.short_rest()
 
     # ── Standard actions ──────────────────────────────────────────────
 
@@ -125,3 +104,4 @@ class ActionTracker:
             f"reaction={self.reactions}, extra_atk={self.remaining_extra_attacks}, "
             f"surges={self.remaining_surges})"
         )
+

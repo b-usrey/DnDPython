@@ -374,85 +374,53 @@ class TeamMemory:
     def get_state_vector(self, creature, enemies: list, allies: list) -> list[float]:
         """
         Build a normalised state vector for ML input.
+        Suitable for use as the StateObservation in the future ML layer.
 
-        9 features (all normalised to roughly 0-1):
+        Features (all normalised to roughly 0-1):
           0: own HP ratio
-          1: recommended target HP ratio
-          2: number of living allies / 5
-          3: number of living enemies / 5
-          4: is any ally under pressure (0 or 1)
-          5: nearest enemy distance / 30  (coarse range bucket)
-          6: most-threatened ally HP ratio (0 if none under pressure)
-          7: estimated P(enemy hits us) based on observed attack rolls
-          8: recommended target threat score / 10 (how dangerous they are)
-
-        State space: 3^9 = 19,683 with n_bins=3.
+          1: distance to recommended target / 100
+          2: recommended target HP ratio
+          3: recommended target threat score / 20
+          4: number of living allies / 5
+          5: number of living enemies / 5
+          6: own position x / map width
+          7: own position y / map height
+          8: round / 20
+          9: is any ally under pressure (0 or 1)
         """
-        import statistics
+        target = self.recommended_target(enemies)
+        pos    = self.battle_map.get_position(creature)
+        w      = self.battle_map.width
+        h      = self.battle_map.height
 
-        target    = self.recommended_target(enemies)
-        hp_ratio  = creature.hp / max(creature.max_hp, 1)
-        target_hp = target.hp / max(target.max_hp, 1) if target else 0.0
+        hp_ratio    = creature.hp / max(creature.max_hp, 1)
+        target_dist = 0.0
+        target_hp   = 0.0
+        target_thr  = 0.0
 
-        # feature 5 â nearest enemy distance, coarse bucket
-        nearest_dist = 0.0
-        if enemies:
+        if target and pos:
             try:
-                nearest_dist = min(
-                    self.battle_map.distance_between(creature, e)
-                    for e in enemies
-                ) / 30.0
+                target_dist = self.battle_map.distance_between(creature, target) / 100
             except LookupError:
                 pass
-        nearest_dist = min(nearest_dist, 1.0)
-
-        # feature 6 â HP of most-threatened ally (0 if none under pressure)
-        threatened_ally_hp = 0.0
-        pressured = [a for a in allies if self.ally_under_pressure(a)]
-        if pressured:
-            threatened_ally_hp = min(
-                a.hp / max(a.max_hp, 1) for a in pressured
-            )
-
-        # feature 7 â estimated P(most-dangerous enemy hits creature's AC)
-        # Uses observed attack-roll totals recorded in ThreatProfile.
-        # Falls back to 0.5 (neutral prior) until enough data exists.
-        hit_prob = 0.5
-        if enemies:
-            # Pick the highest-threat enemy we have data on
-            scored = [
-                (e, self._threats[id(e)])
-                for e in enemies
-                if id(e) in self._threats
-                and len(self._threats[id(e)].attack_bonuses_seen) >= 2
-            ]
-            if scored:
-                _, profile = max(scored, key=lambda x: x[1].threat_score)
-                median_total    = statistics.median(profile.attack_bonuses_seen)
-                inferred_bonus  = median_total - 10.5
-                needed          = creature.ac - inferred_bonus
-                hit_prob        = (21 - max(1, min(20, int(needed)))) / 20.0
-                hit_prob        = max(0.05, min(0.95, hit_prob))
-
-        # feature 8 â recommended target threat score, normalised
-        threat_score_norm = 0.0
-        if target:
-            threat_score_norm = min(self.threat_level(target) / 10.0, 1.0)
+            target_hp  = target.hp / max(target.max_hp, 1)
+            target_thr = self.threat_level(target) / 20
 
         ally_pressure = 1.0 if any(
             self.ally_under_pressure(a) for a in allies
         ) else 0.0
 
         return [
-            hp_ratio,            # 0
-            target_hp,           # 1
-            len(allies) / 5,     # 2
-            len(enemies) / 5,    # 3
-            ally_pressure,       # 4
-            nearest_dist,        # 5
-            threatened_ally_hp,  # 6
-            hit_prob,            # 7
-            threat_score_norm,   # 8
+            hp_ratio,
+            target_dist,
+            target_hp,
+            target_thr,
+            len(allies) / 5,
+            len(enemies) / 5,
+            (pos[0] / w) if pos else 0.5,
+            (pos[1] / h) if pos else 0.5,
+            self.round / 20,
+            ally_pressure,
         ]
 
     def summary(self) -> str:
