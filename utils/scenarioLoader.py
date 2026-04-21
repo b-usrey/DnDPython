@@ -46,7 +46,11 @@ class ScenarioLoader:
 
         # Load monsters
         for mdata in scenario_data.get("monsters", []):
+            mtype = mdata["type"].upper()
+            if mtype not in MONSTER_REGISTRY:
+                print(f"⚠ Monster type '{mdata['type']}' not found in MONSTER_REGISTRY")
+                continue
             for _ in range(mdata.get("count", 1)):
-                monsters.append(self.factory.create(MONSTER_REGISTRY[mdata["type"]], self.event))
+                monsters.append(self.factory.create(MONSTER_REGISTRY[mtype], self.event))
 
         return players, monsters

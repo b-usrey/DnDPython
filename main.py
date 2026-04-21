@@ -224,4 +224,24 @@ if __name__ == "__main__":
     parser.add_argument("--no-vis", action="store_true",
                         help="Disable the matplotlib battle map visualiser")
     args = parser.parse_args()
-    main(args)
+
+    # Backwards-compat: if someone runs the old-style
+    #   python main.py --json foo.json
+    # instead of the new-style
+    #   python main.py run --json foo.json
+    # we get a clean error rather than "no attribute 'player'"
+    if not hasattr(args, 'command') or args.command is None:
+        parser.print_help()
+        raise SystemExit(1)
+
+
+    import time
+    start_time = time.perf_counter()
+    if args.command == "run":
+        main(args)
+    elif args.command == "train":
+        run_training(args)
+    elif args.command == "eval":
+        run_evaluation(args)
+    stop_time = time.perf_counter()
+    print(f"Process took: {(stop_time-start_time):.4f} seconds")

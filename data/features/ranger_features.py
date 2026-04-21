@@ -73,8 +73,8 @@ class DreadAmbusher(Feature):
 class FavoredFoe(Feature):
     name = "Favored Foe"
     EVENT_MAP = {
-        "attack": "on_attack",
-        "damage": "on_damage",
+        "attack_resolved": "on_attack_resolved",
+        "TurnStarted":     "on_turn_started",
     }
 
     def on_attack(self, data):

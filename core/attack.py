@@ -3,6 +3,7 @@ import random
 
 VERBOSE = True
 
+
 class Attack(ABC):
     def __init__(self, attacker, target, base_dice, item=None, range=False):
         self.attacker   = attacker
@@ -34,6 +35,35 @@ class Attack(ABC):
 
 
 class WeaponAttack(Attack):
+    """
+    Five-phase attack pipeline, each mapped to a D&D 5e timing phrase:
+
+    Phase 1  "attack"        — "When you make an attack roll"
+                               Modify to_hit_mod, add tags, set advantage.
+                               e.g. Archery +2, Sharpshooter -5/+10
+             roll_to_hit()
+
+    Phase 2  "hit"           — "When you hit"
+                               Hit is confirmed. Add extra_dice, apply
+                               per-hit bonuses BEFORE damage is rolled.
+                               e.g. DreadAmbusher +1d8, FavoredFoe bonus,
+                                    Sneak Attack, Hunter's Mark
+
+    Phase 3  "damage"        — "When you deal damage"
+                               Last-chance damage modifications.
+                               creature._on_damage_event is subscribed here
+                               and calls roll_damage() + take_damage().
+
+    Phase 4  "damage_dealt"  — "When you take damage"
+                               Target has taken damage; reactions that
+                               respond to being hit fire here.
+                               e.g. Hellish Rebuke, Absorb Elements
+
+    Phase 5  "attack_resolved" — Full resolution complete.
+                               Cleanup, logging, post-attack effects.
+                               e.g. Shield of Faith expires, BracersOfArchery
+    """
+
     def declare_attack(self):
         attack_data = {
             "event_type": "attack",

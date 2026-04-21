@@ -9,53 +9,75 @@
   "skill_choices": {
     "choose": 3,
     "options": [
-      "Animal Handling",
-      "Athletics",
-      "Insight",
-      "Investigation",
-      "Nature",
-      "Perception",
-      "Stealth",
-      "Survival"
+      "Animal Handling", "Athletics", "Insight", "Investigation",
+      "Nature", "Perception", "Stealth", "Survival"
     ]
   },
   "multiclassing": {
-    "requirements": {
-      "Dexterity": 13,
-      "Wisdom": 13
-    },
+    "requirements": { "Dexterity": 13, "Wisdom": 13 },
     "armor_proficiencies": ["light", "medium", "shields"],
     "weapon_proficiencies": ["simple", "martial"]
   },
   "features_by_level": {
     "1": [
       { "name": "Favored Foe" },
-      { "name": "Deft Explorer" }
+      { "name": "Deft Explorer",   "description": "Gain a skill or language. Non-combat." }
     ],
     "2": [
       {
         "name": "Fighting Style",
-        "options": [
-          "Bling Fighting",
-          "Druidic Warrior",
-          "Thrown Weapon FIghting",
-          "Archery",
-          "Defense",
-          "Dueling",
-          "Two-Weapon Fighting"
-        ]
+        "options": ["Archery", "Defense", "Dueling", "Two-Weapon Fighting",
+                    "Druidic Warrior", "Thrown Weapon Fighting", "Blind Fighting"]
       },
-      { "name": "Spellcasting" }
+      { "name": "Spellcasting",    "description": "Cast ranger spells using WIS." }
     ],
     "3": [
       {
         "name": "Ranger Archetype",
-        "options": ["Hunter", "Beast Master", "Gloom Stalker"]
+        "options": ["Hunter", "Beast Master", "Gloom Stalker",
+                    "Fey Wanderer", "Swarmkeeper", "Horizon Walker"]
       },
-      { "name": "Primeval Awareness" }
+      { "name": "Preternatural Awareness", "description": "Detect hidden/invisible nearby. Non-combat." }
+    ],
+    "4": [
+      { "name": "ASI", "description": "Ability Score Improvement or Feat." }
     ],
     "5": [
       { "name": "Extra Attack" }
+    ],
+    "6": [
+      { "name": "Roving" }
+    ],
+    "8": [
+      { "name": "Land's Stride" },
+      { "name": "ASI", "description": "Ability Score Improvement or Feat." }
+    ],
+    "9": [
+      { "name": "Tireless", "description": "Reduce exhaustion and gain temp HP. Non-combat." }
+    ],
+    "10": [
+      { "name": "Nature's Veil" }
+    ],
+    "12": [
+      { "name": "ASI", "description": "Ability Score Improvement or Feat." }
+    ],
+    "14": [
+      { "name": "Vanish", "description": "Hide as a bonus action. Tracking immunity. Non-combat." }
+    ],
+    "16": [
+      { "name": "ASI", "description": "Ability Score Improvement or Feat." }
+    ],
+    "17": [
+      { "name": "Deft Explorer", "description": "Third Deft Explorer improvement. Non-combat." }
+    ],
+    "18": [
+      { "name": "Feral Senses" }
+    ],
+    "19": [
+      { "name": "ASI", "description": "Ability Score Improvement or Feat." }
+    ],
+    "20": [
+      { "name": "Foe Slayer" }
     ]
   },
   "subclasses": {
@@ -64,29 +86,29 @@
         "3": [
           {
             "name": "Dread Ambusher",
-            "description": "At the start of your first turn of each combat, your walking speed increases by 10 feet, and if you take the Attack action you can make one additional weapon attack dealing an extra 1d8 damage."
+            "description": "Round 1: +10ft speed, extra attack dealing +1d8 extra damage."
           },
           {
             "name": "Umbral Sight",
-            "description": "You gain darkvision out to 60 feet, or an additional 30 feet if you already have it. Creatures that rely on darkvision cannot see you in darkness."
+            "description": "Darkvision 60ft (or +30ft). Non-combat stealth benefit."
           }
         ],
         "7": [
           {
             "name": "Iron Mind",
-            "description": "You gain proficiency in Wisdom saving throws. If you already have it, you can choose Intelligence or Charisma."
+            "description": "Proficiency in WIS saves (or INT/CHA if already proficient)."
           }
         ],
         "11": [
           {
-            "name": "Stalker’s Flurry",
-            "description": "Once per turn, if you miss with a weapon attack, you can make another attack as part of the same action."
+            "name": "Stalker's Flurry",
+            "description": "Once per turn: if you miss, make one free extra attack."
           }
         ],
         "15": [
           {
             "name": "Shadowy Dodge",
-            "description": "When a creature makes an attack roll against you, you can use your reaction to impose disadvantage on the roll."
+            "description": "Reaction: impose disadvantage on one attack roll against you."
           }
         ]
       }
@@ -96,13 +118,16 @@
     "spell_list": "ranger",
     "spellcasting_ability": "Wisdom",
     "progression": {
-      "1": { "slots": [2] },
-      "2": { "slots": [2] },
-      "3": { "slots": [3] },
-      "4": { "slots": [3] },
-      "5": { "slots": [4, 2] },
-      "9": { "slots": [4, 3, 2] }
+      "2":  { "slots": [2] },
+      "3":  { "slots": [3] },
+      "5":  { "slots": [4, 2] },
+      "7":  { "slots": [4, 3] },
+      "9":  { "slots": [4, 3, 2] },
+      "11": { "slots": [4, 3, 3] },
+      "13": { "slots": [4, 3, 3, 1] },
+      "15": { "slots": [4, 3, 3, 2] },
+      "17": { "slots": [4, 3, 3, 3, 1] },
+      "19": { "slots": [4, 3, 3, 3, 2] }
     }
   }
 }
-
