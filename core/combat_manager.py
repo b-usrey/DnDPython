@@ -56,6 +56,7 @@ class CombatManager:
         self.battle_map = battle_map
         self.mode = mode
         self.max_rounds = max_rounds
+        self.timed_out  = False
         self.ai = TacticalAI()
 
         # Subscribe to creature_downed so we can prune the initiative order
@@ -92,10 +93,13 @@ class CombatManager:
         # before _run_turn gets to handle it properly)
         self.event.broadcast("CombatStarted", {"round": self.initiative.round})
 
+        self.timed_out = False
         for _ in range(self.max_rounds):
             if not self._combat_continues():
                 break
             self._run_round()
+        else:
+            self.timed_out = True
 
         return self._resolve_outcome()
 

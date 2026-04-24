@@ -1,5 +1,6 @@
 {
   "name": "Brendiir vs Goblins",
+  "max_rounds": 30,
   "map": {
     "width": 20,
     "height": 16,

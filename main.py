@@ -28,6 +28,48 @@ def load_json(filename):
         return json.load(f)
 
 
+def _eval_worker(args_tuple):
+    """Module-level function so ProcessPoolExecutor can pickle it on Windows."""
+    import io, contextlib
+    scenario_data, weights_path, method, team, n = args_tuple
+    from core.ml_strategy import CombatEnv, RLStrategySelector, EvolutionarySelector, Strategy
+    env = CombatEnv(scenario_data=scenario_data, trained_team=team, silent=True)
+    if method == "evo":
+        sel = EvolutionarySelector()
+    else:
+        sel = RLStrategySelector()
+        sel.eps = 0.0
+    with contextlib.redirect_stdout(io.StringIO()):
+        sel.load(weights_path)
+    wins = 0
+    total_rounds = 0
+    tactic_counts = {s: 0 for s in Strategy}
+    for _ in range(n):
+        env.run_episode(selector=sel)
+        if env._outcome_won():
+            wins += 1
+        if env.cm is not None:
+            total_rounds += env.cm.initiative.round
+    for s, c in sel.tactic_counts.items():
+        tactic_counts[s] += c
+    return wins, {s.name: c for s, c in tactic_counts.items()}, total_rounds
+
+
+def _baseline_worker(args_tuple):
+    scenario_data, team, n = args_tuple
+    from core.ml_strategy import CombatEnv
+    env = CombatEnv(scenario_data=scenario_data, trained_team=team, silent=True)
+    wins = 0
+    total_rounds = 0
+    for _ in range(n):
+        env.run_episode(selector=None)
+        if env._outcome_won():
+            wins += 1
+        if env.cm is not None:
+            total_rounds += env.cm.initiative.round
+    return wins, total_rounds
+
+
 # build_map, place_creatures and _find_placement_squares live in scenarioLoader
 # so CombatEnv can import them without importing main.py (which would re-run
 # the CLI argument parser and cause AttributeError on args.player etc.)
@@ -194,6 +236,7 @@ def run_training(args):
             verbose     = True,
             print_every = args.print_every,
             log         = log,
+            workers     = args.workers,
         )
 
         weights_path = os.path.join(args.save_dir, f"{run_name}_rl.npy")
@@ -204,6 +247,7 @@ def run_training(args):
             pop_size       = args.pop_size,
             elite_frac     = args.elite_frac,
             mutation_scale = args.mutation_scale,
+            crossover_rate = args.crossover_rate,
         )
         if args.load:
             sel.load(args.load)
@@ -214,6 +258,7 @@ def run_training(args):
             combats_per_ind = args.combats_per_ind,
             verbose         = True,
             log             = log,
+            workers         = args.workers,
         )
 
         weights_path = os.path.join(args.save_dir, f"{run_name}_evo.npy")
@@ -239,55 +284,233 @@ def run_evaluation(args):
     Usage:
         python main.py eval --json brendiir_vs_goblins.json --load saves/brendiir_vs_goblins_rl.npy
     """
-    from core.ml_strategy import CombatEnv, RLStrategySelector, TrainingLog
+    import math
+    from core.ml_strategy import Strategy
 
     scenario_data = load_json(args.json)
 
-    env = CombatEnv(
-        scenario_data=scenario_data,
-        trained_team=args.team,
-        silent=True,
-    )
+    def _confidence_interval(p, n, z=1.96):
+        se = math.sqrt(p * (1 - p) / n) if n > 0 else 0
+        return se * z
 
-    sel = RLStrategySelector()
-    sel.load(args.load)
-    sel.eps = 0.0          # pure exploitation — no random actions
+    def _print_stats(label, wins, n, avg_rounds=None):
+        rate = wins / n
+        ci   = _confidence_interval(rate, n)
+        std  = math.sqrt(rate * (1 - rate))
+        print(f"  {label}")
+        print(f"    Win rate   : {rate:.1%}  ({wins}/{n})")
+        print(f"    Std dev    : {std:.3f}  (per-episode Bernoulli σ)")
+        print(f"    95% CI     : [{max(0, rate-ci):.1%}, {min(1, rate+ci):.1%}]")
+        if avg_rounds is not None:
+            print(f"    Avg rounds : {avg_rounds:.1f}")
+
+    import time
+    from concurrent.futures import ProcessPoolExecutor, as_completed
+
+    workers    = getattr(args, "workers", 1)
+    chunk_size = max(1, min(20, args.n // 20))  # ~20 progress updates total
+
+    def _make_chunks(total):
+        """Split total into chunk_size pieces, last chunk absorbs remainder."""
+        sizes = []
+        remaining = total
+        while remaining > 0:
+            sizes.append(min(chunk_size, remaining))
+            remaining -= chunk_size
+        return sizes
+
+    def _run_with_progress(label, total, futures_fn):
+        """Submit tasks, collect results via as_completed, print live progress."""
+        chunks      = _make_chunks(total)
+        futures     = futures_fn(chunks)
+        chunk_map   = {id(f): chunks[i] for i, f in enumerate(futures)}
+        wins        = 0
+        total_rounds = 0
+        tactic_counts = {s: 0 for s in Strategy}
+        done        = 0
+        t0          = time.perf_counter()
+        w_str       = f"{workers} worker{'s' if workers > 1 else ''}"
+        print(f"\n  {label}  ({total} eps, {w_str}, chunk={chunk_size})")
+        for fut in as_completed(futures):
+            result = fut.result()
+            if len(result) == 3:
+                w, counts, rounds = result
+                for name, c in counts.items():
+                    tactic_counts[Strategy[name]] += c
+            else:
+                w, rounds = result
+            wins         += w
+            total_rounds += rounds
+            done         += chunk_map[id(fut)]
+            pct     = done / total
+            bar     = ("█" * int(pct * 25)).ljust(25)
+            wr      = wins / done if done else 0
+            elapsed = time.perf_counter() - t0
+            eta     = (elapsed / done * (total - done)) if done else 0
+            print(f"\r    [{bar}] {done:>{len(str(total))}}/{total}  "
+                  f"win rate: {wr:.1%}  elapsed: {elapsed:.0f}s  eta: {eta:.0f}s",
+                  end="", flush=True)
+        print()
+        return wins, tactic_counts, total_rounds
+
+    def _submit_trained(chunks):
+        executor = ProcessPoolExecutor(max_workers=workers)
+        futs = [
+            executor.submit(_eval_worker,
+                            (scenario_data, args.load, args.method, args.team, c))
+            for c in chunks
+        ]
+        _submit_trained._executor = executor
+        return futs
+
+    def _submit_baseline(chunks):
+        executor = ProcessPoolExecutor(max_workers=workers)
+        futs = [
+            executor.submit(_baseline_worker, (scenario_data, args.team, c))
+            for c in chunks
+        ]
+        _submit_baseline._executor = executor
+        return futs
 
     # ── Trained-policy evaluation ────────────────────────────────────────
-    print(f"\n  Evaluating trained policy over {args.n} episodes (ε=0)...")
-    trained_wins = 0
-    for i in range(args.n):
-        env.run_episode(selector=sel)
-        if env._outcome_won():
-            trained_wins += 1
-        if (i + 1) % (args.n // 10) == 0:
-            print(f"    {i+1}/{args.n}  running win rate: {trained_wins/(i+1):.1%}")
-
-    trained_rate = trained_wins / args.n
+    trained_wins, tactic_counts, trained_rounds = _run_with_progress(
+        "Trained policy (ε=0)", args.n, _submit_trained
+    )
+    _submit_trained._executor.shutdown(wait=False)
+    trained_rate       = trained_wins / args.n
+    trained_avg_rounds = trained_rounds / args.n
+    total_tactics      = sum(tactic_counts.values())
 
     # ── Random baseline ──────────────────────────────────────────────────
-    print(f"\n  Evaluating random baseline over {args.n} episodes...")
-    random_wins = 0
-    for i in range(args.n):
-        env.run_episode(selector=None)   # None → rule-based / random TacticalAI
-        if env._outcome_won():
-            random_wins += 1
+    random_wins, _, random_rounds = _run_with_progress(
+        "Random baseline", args.n, _submit_baseline
+    )
+    _submit_baseline._executor.shutdown(wait=False)
+    random_rate       = random_wins / args.n
+    random_avg_rounds = random_rounds / args.n
 
-    random_rate = random_wins / args.n
+    # ── Build results dict ───────────────────────────────────────────────
+    def _stats_dict(wins, n):
+        p  = wins / n
+        ci = _confidence_interval(p, n)
+        return {
+            "wins": wins, "episodes": n,
+            "win_rate": round(p, 4),
+            "std_dev":  round(math.sqrt(p * (1 - p)), 4),
+            "ci_95_lo": round(max(0.0, p - ci), 4),
+            "ci_95_hi": round(min(1.0, p + ci), 4),
+        }
 
-    # ── Report ───────────────────────────────────────────────────────────
-    delta = trained_rate - random_rate
-    print(f"\n  {'─'*40}")
-    print(f"  Trained policy win rate : {trained_rate:.1%}  ({trained_wins}/{args.n})")
-    print(f"  Random baseline win rate: {random_rate:.1%}  ({random_wins}/{args.n})")
-    print(f"  Improvement over random : {delta:+.1%}")
+    tactic_pcts = {
+        s.name: {
+            "count": tactic_counts.get(s, 0),
+            "pct":   round(tactic_counts.get(s, 0) / total_tactics, 4)
+                     if total_tactics > 0 else 0.0,
+        }
+        for s in Strategy
+    }
+
+    results = {
+        "scenario":        args.json,
+        "weights":         args.load,
+        "method":          args.method,
+        "trained_team":    args.team,
+        "trained_policy":  {**_stats_dict(trained_wins, args.n),
+                            "avg_rounds": round(trained_avg_rounds, 2)},
+        "random_baseline": {**_stats_dict(random_wins, args.n),
+                            "avg_rounds": round(random_avg_rounds, 2)},
+        "improvement":     round(trained_rate - random_rate, 4),
+        "tactic_counts":   tactic_pcts,
+        "total_tactic_turns": total_tactics,
+    }
+
+    # ── Print report ─────────────────────────────────────────────────────
+    delta = results["improvement"]
+    sep   = f"  {'─'*44}"
+    print(f"\n{sep}")
+    _print_stats("Trained policy:", trained_wins, args.n, trained_avg_rounds)
+    print()
+    _print_stats("Random baseline:", random_wins, args.n, random_avg_rounds)
+    print(f"\n  Improvement over random : {delta:+.1%}")
     if delta > 0.05:
         print("  ✓ Policy learned something meaningful above chance.")
     elif delta > 0:
         print("  ~ Marginal improvement — consider more training episodes.")
     else:
         print("  ✗ Policy is no better than random — training has not converged.")
-    print(f"  {'─'*40}\n")
+
+    print(f"\n  Tactic selections ({total_tactics} total turns):")
+    for strategy in Strategy:
+        count = tactic_counts.get(strategy, 0)
+        pct   = count / total_tactics if total_tactics > 0 else 0
+        bar   = "█" * int(pct * 30)
+        print(f"    {strategy.name:<12} {count:>6}  ({pct:.1%})  {bar}")
+    print(sep)
+
+    # ── Save JSON ────────────────────────────────────────────────────────
+    if getattr(args, "output", None):
+        import json
+        os.makedirs(os.path.dirname(args.output) or ".", exist_ok=True)
+        with open(args.output, "w") as f:
+            json.dump(results, f, indent=2)
+        print(f"\n  Results saved → {args.output}")
+
+    # ── Save plot ────────────────────────────────────────────────────────
+    if getattr(args, "plot", None):
+        try:
+            import matplotlib.pyplot as plt
+            import numpy as np
+
+            fig, (ax_w, ax_t) = plt.subplots(1, 2, figsize=(13, 5))
+            scenario_name = os.path.splitext(args.json)[0]
+            fig.suptitle(
+                f"Eval — {scenario_name}  ({args.method.upper()}, n={args.n})",
+                fontweight="bold",
+            )
+
+            # Left: win rate comparison with 95% CI error bars
+            labels = ["Trained policy", "Random baseline"]
+            rates  = [trained_rate, random_rate]
+            cis    = [
+                _confidence_interval(trained_rate, args.n),
+                _confidence_interval(random_rate,  args.n),
+            ]
+            colors = ["steelblue", "gray"]
+            bars   = ax_w.bar(labels, rates, color=colors, alpha=0.8, width=0.4)
+            ax_w.errorbar(labels, rates, yerr=cis, fmt="none",
+                          color="black", capsize=6, linewidth=2)
+            for bar, rate in zip(bars, rates):
+                ax_w.text(bar.get_x() + bar.get_width() / 2,
+                          bar.get_height() + 0.01, f"{rate:.1%}",
+                          ha="center", va="bottom", fontweight="bold")
+            ax_w.set_ylim(0, min(1.0, max(rates) * 1.5 + 0.1))
+            ax_w.set_ylabel("Win rate")
+            ax_w.set_title("Win rate vs baseline  (95% CI)")
+            ax_w.axhline(random_rate, color="gray", linestyle="--",
+                         linewidth=1, alpha=0.5)
+
+            # Right: tactic selection horizontal bar chart
+            names  = [s.name for s in Strategy]
+            counts = [tactic_counts.get(s, 0) for s in Strategy]
+            pcts   = [c / total_tactics if total_tactics > 0 else 0 for c in counts]
+            y_pos  = np.arange(len(names))
+            ax_t.barh(y_pos, pcts, color="seagreen", alpha=0.8)
+            ax_t.set_yticks(y_pos)
+            ax_t.set_yticklabels(names)
+            ax_t.set_xlabel("Fraction of turns")
+            ax_t.set_title(f"Tactic selection  ({total_tactics} turns)")
+            ax_t.set_xlim(0, max(pcts) * 1.3 if pcts else 1)
+            for i, (p, c) in enumerate(zip(pcts, counts)):
+                ax_t.text(p + 0.005, i, f"{p:.1%}  (n={c})",
+                          va="center", fontsize=9)
+
+            plt.tight_layout()
+            os.makedirs(os.path.dirname(args.plot) or ".", exist_ok=True)
+            fig.savefig(args.plot, dpi=150)
+            plt.close(fig)
+            print(f"  Plot saved → {args.plot}")
+        except ImportError:
+            print("  matplotlib not available — skipping plot")
 
 
 if __name__ == "__main__":
@@ -337,6 +560,8 @@ if __name__ == "__main__":
                          help="Rolling-average window for convergence plot (default: 20)")
     train_p.add_argument("--verbose",   action="store_true",
                          help="Print every episode/generation during training")
+    train_p.add_argument("--workers",   type=int, default=1,
+                         help="Parallel worker processes (RL: averages independent runs; evo: parallel fitness eval)")
     # RL hyperparams
     rl_g = train_p.add_argument_group("RL hyperparameters")
     rl_g.add_argument("--episodes",    type=int,   default=500)
@@ -355,14 +580,32 @@ if __name__ == "__main__":
     evo_g.add_argument("--pop-size",        type=int,   default=20)
     evo_g.add_argument("--elite-frac",      type=float, default=0.2)
     evo_g.add_argument("--mutation-scale",  type=float, default=0.1)
+    evo_g.add_argument("--crossover-rate",  type=float, default=0.5,
+                       help="Probability of uniform crossover between two elite parents (0=mutation only)")
 
     # ── eval: evaluate a trained selector against a random baseline ──────
     eval_p = sub.add_parser("eval", help="Evaluate a trained selector (ε=0) vs random baseline")
     eval_p.add_argument("--json",   required=True, help="Scenario JSON filename (in scenarios/)")
     eval_p.add_argument("--load",   required=True, help="Path to trained .npy weights file")
+    eval_p.add_argument("--method", choices=["rl", "evo"], default="rl",
+                        help="Selector type matching the weights file (default: rl)")
     eval_p.add_argument("--team",   default="red", help="Trained team (default: red)")
     eval_p.add_argument("--n",      type=int, default=200,
                         help="Number of evaluation episodes (default: 200)")
+    eval_p.add_argument("--output",  default=None,
+                        help="Save results to this JSON file path")
+    eval_p.add_argument("--plot",    default=None,
+                        help="Save win rate + tactic chart to this PNG path")
+    eval_p.add_argument("--workers", type=int, default=1,
+                        help="Parallel worker processes for faster evaluation (default: 1)")
+
+    # ── plot: re-plot a saved training log ───────────────────────────────
+    plot_p = sub.add_parser("plot", help="Re-plot a saved training log CSV")
+    plot_p.add_argument("--log",       required=True, help="Path to training log CSV")
+    plot_p.add_argument("--smoothing", type=int, default=500,
+                        help="Rolling-average window (default: 500)")
+    plot_p.add_argument("--output",    default=None,
+                        help="Save plot to this path instead of showing it")
 
     args = parser.parse_args()
 
@@ -384,5 +627,15 @@ if __name__ == "__main__":
         run_training(args)
     elif args.command == "eval":
         run_evaluation(args)
+    elif args.command == "plot":
+        from core.ml_strategy import TrainingLog
+        log = TrainingLog.load_csv(args.log)
+        log.plot(
+            smoothing=args.smoothing,
+            save_path=args.output,
+            show=args.output is None,
+        )
+        if args.output:
+            print(f"  Plot saved → {args.output}")
     stop_time = time.perf_counter()
     print(f"Process took: {(stop_time-start_time):.4f} seconds")

@@ -9,9 +9,16 @@ def _load_json(relative_path):
     with open(full_path, "r") as f:
         return json.load(f)
 
+_ITEM_DATA_CACHE    = None
+_ENCHANTMENT_CACHE  = None
+
 def load_item_json(item_name):
-    ITEM_DATA = _load_json(os.path.join("data", "items.json"))
-    ENCHANTMENTS = _load_json(os.path.join("data", "enchantments.json"))
+    global _ITEM_DATA_CACHE, _ENCHANTMENT_CACHE
+    if _ITEM_DATA_CACHE is None:
+        _ITEM_DATA_CACHE   = _load_json(os.path.join("data", "items.json"))
+        _ENCHANTMENT_CACHE = _load_json(os.path.join("data", "enchantments.json"))
+    ITEM_DATA    = _ITEM_DATA_CACHE
+    ENCHANTMENTS = _ENCHANTMENT_CACHE
     base_name = item_name
     enchant_key = None
     if "+" in item_name:
