@@ -91,8 +91,14 @@ N_STRATEGIES = len(Strategy)
 # ---------------------------------------------------------------------------
 
 class StrategySelector:
+    def __init__(self):
+        self.tactic_counts = {s: 0 for s in Strategy}
+
     def select(self, obs: list[float]) -> Strategy:
         raise NotImplementedError
+
+    def reset_tactic_counts(self):
+        self.tactic_counts = {s: 0 for s in Strategy}
 
     def update(self, obs, action, reward, next_obs, done):
         pass
@@ -146,6 +152,7 @@ class RLStrategySelector(StrategySelector):
     def __init__(self, n_features=9, n_bins=3,
                  alpha=0.20, gamma=0.95,
                  eps=1.0, eps_min=0.05, eps_decay=0.999):
+        super().__init__()
         self.disc      = ObsDiscretiser(n_features, n_bins)
         self.alpha     = alpha
         self.gamma     = gamma
@@ -157,8 +164,11 @@ class RLStrategySelector(StrategySelector):
     def select(self, obs: list[float]) -> Strategy:
         s = self.disc.discretise(obs)
         if random.random() < self.eps:
-            return random.choice(list(Strategy))
-        return Strategy(int(np.argmax(self.Q[s])))
+            result = random.choice(list(Strategy))
+        else:
+            result = Strategy(int(np.argmax(self.Q[s])))
+        self.tactic_counts[result] += 1
+        return result
 
     def update(self, obs, action: Strategy, reward: float, next_obs, done: bool):
         s  = self.disc.discretise(obs)
@@ -199,21 +209,25 @@ class EvolutionarySelector(StrategySelector):
     """
 
     def __init__(self, n_features=9, pop_size=20,
-                 elite_frac=0.2, mutation_scale=0.1):
-        self.n_obs   = n_features
-        self.pop_sz  = pop_size
-        self.elite_n = max(1, int(pop_size * elite_frac))
-        self.mut_std = mutation_scale
-        self.W       = np.random.randn(n_features, N_STRATEGIES).astype(np.float32)
-        self._pop    = [
+                 elite_frac=0.2, mutation_scale=0.1, crossover_rate=0.5):
+        super().__init__()
+        self.n_obs        = n_features
+        self.pop_sz       = pop_size
+        self.elite_n      = max(1, int(pop_size * elite_frac))
+        self.mut_std      = mutation_scale
+        self.crossover_rate = crossover_rate
+        self.W            = np.random.randn(n_features, N_STRATEGIES).astype(np.float32)
+        self._pop         = [
             np.random.randn(n_features, N_STRATEGIES).astype(np.float32)
             for _ in range(pop_size)
         ]
 
     def select(self, obs: list[float]) -> Strategy:
         o = np.array(obs[:self.n_obs], dtype=np.float32)
-        scores = o @ self.W   # (n_features,) @ (n_features, N_STRATEGIES) → (N_STRATEGIES,)
-        return Strategy(int(np.argmax(scores)))
+        scores = o @ self.W
+        result = Strategy(int(np.argmax(scores)))
+        self.tactic_counts[result] += 1
+        return result
 
     def evolve_generation(self, fitness_scores: list[float]):
         ranked = sorted(zip(fitness_scores, self._pop),
@@ -221,8 +235,14 @@ class EvolutionarySelector(StrategySelector):
         elite = [w.copy() for _, w in ranked[:self.elite_n]]
         new_pop = list(elite)
         while len(new_pop) < self.pop_sz:
-            parent = random.choice(elite)
-            child  = parent + np.random.randn(*parent.shape).astype(np.float32) * self.mut_std
+            parent_a = random.choice(elite)
+            if self.crossover_rate > 0.0 and len(elite) > 1 and random.random() < self.crossover_rate:
+                parent_b = random.choice(elite)
+                mask  = np.random.rand(*parent_a.shape) < 0.5
+                child = np.where(mask, parent_a, parent_b).astype(np.float32)
+            else:
+                child = parent_a.copy()
+            child = child + np.random.randn(*child.shape).astype(np.float32) * self.mut_std
             new_pop.append(child)
         self._pop = new_pop
         self.W    = elite[0]
@@ -264,11 +284,13 @@ class CombatEnv:
         silent:         suppress all print output during training
     """
 
-    WIN_REWARD   =  1.0
-    LOSS_REWARD  = -1.0
-    STEP_REWARD  = -0.01   # small penalty per turn encourages efficiency
-    KILL_REWARD  =  0.3    # bonus per enemy downed
-    DAMAGE_SCALE =  0.005  # reward per HP of damage dealt
+    WIN_REWARD      =  1.0
+    LOSS_REWARD     = -1.0
+    TIMEOUT_REWARD  =  0.4   # base reward for lasting full max_rounds ("reinforcements")
+    ATTRITION_SCALE =  0.5   # how much enemy attrition softens a loss
+    STEP_REWARD     = -0.01  # small penalty per turn encourages efficiency
+    KILL_REWARD     =  0.3   # bonus per enemy downed
+    DAMAGE_SCALE    =  0.005 # reward per HP of damage dealt
 
     def __init__(
         self,
@@ -332,8 +354,10 @@ class CombatEnv:
             )
 
             initiative = InitiativeManager(players + monsters, event)
+            max_rounds = self.scenario_data.get("max_rounds", 100)
             self.cm    = CombatManager(
-                event, initiative, battle_map, mode=CombatMode.AUTO
+                event, initiative, battle_map, mode=CombatMode.AUTO,
+                max_rounds=max_rounds,
             )
             self.memories = TeamMemory.create_for_all_teams(battle_map, event)
 
@@ -374,28 +398,64 @@ class CombatEnv:
 
         self._done = True
 
-        # Determine the true binary outcome first (not influenced by shaping).
-        # This is stored on self so train_rl() can read it via _outcome_won()
-        # without relying on whether the shaped reward happens to be positive.
-        survivors = [
-            c for _, c in self.cm.initiative.initiative_order
-            if c.is_alive()
-        ]
-        won = any(c.team == self.trained_team for c in survivors)
-        reward = self.WIN_REWARD if won else self.LOSS_REWARD
+        all_creatures = [c for _, c in self.cm.initiative.initiative_order]
+        survivors     = [c for c in all_creatures if c.is_alive()]
+        enemies       = [c for c in all_creatures if c.team != self.trained_team]
 
-        # Shape reward: kill count + damage dealt.
-        # NOTE: this shaped value is returned for logging/monitoring only.
-        # Q-table updates in train_rl() use the binary outcome, not this.
-        for _, c in self.cm.initiative.initiative_order:
-            if c.team == self.trained_team:
-                continue
+        won      = any(c.team == self.trained_team for c in survivors)
+        timed_out = self.cm.timed_out
+
+        # ── Fractional outcome reward ────────────────────────────────────
+        # enemy_attrition: fraction of enemies killed [0, 1]
+        enemies_killed   = sum(1 for c in enemies if not c.is_alive())
+        enemy_attrition  = enemies_killed / len(enemies) if enemies else 0.0
+
+        if won and not timed_out:
+            # Clear victory — all enemies eliminated
+            reward = self.WIN_REWARD
+        elif timed_out:
+            # Lasted to max_rounds ("reinforcements arrived")
+            # Scale by surviving HP fraction so healthier survival = better reward
+            trained_alive = [c for c in survivors if c.team == self.trained_team]
+            hp_fraction   = (sum(c.hp for c in trained_alive) /
+                             sum(c.max_hp for c in trained_alive)) if trained_alive else 0.0
+            reward = self.TIMEOUT_REWARD * hp_fraction
+        else:
+            # Defeat — soften by how much attrition was dealt
+            reward = self.LOSS_REWARD + self.ATTRITION_SCALE * enemy_attrition
+
+        # ── Per-turn shaping: damage dealt + kills ───────────────────────
+        # Returned for logging/convergence plots only.
+        # train_rl() reads _outcome_reward() for Q-updates, not this value.
+        for c in enemies:
             hp_lost = c.max_hp - c.hp
             reward += hp_lost * self.DAMAGE_SCALE
             if not c.is_alive():
                 reward += self.KILL_REWARD
 
+        self._won      = won and not timed_out
+        self._timed_out = timed_out
+        self._enemy_attrition = enemy_attrition
         return reward
+
+    def _outcome_reward(self) -> float:
+        """Fractional outcome reward without per-turn shaping — used for Q-updates."""
+        all_creatures = [c for _, c in self.cm.initiative.initiative_order]
+        survivors     = [c for c in all_creatures if c.is_alive()]
+        enemies       = [c for c in all_creatures if c.team != self.trained_team]
+        won           = any(c.team == self.trained_team for c in survivors)
+        timed_out     = self.cm.timed_out
+        enemies_killed = sum(1 for c in enemies if not c.is_alive())
+        enemy_attrition = enemies_killed / len(enemies) if enemies else 0.0
+        if won and not timed_out:
+            return self.WIN_REWARD
+        elif timed_out:
+            trained_alive = [c for c in survivors if c.team == self.trained_team]
+            hp_fraction   = (sum(c.hp for c in trained_alive) /
+                             sum(c.max_hp for c in trained_alive)) if trained_alive else 0.0
+            return self.TIMEOUT_REWARD * hp_fraction
+        else:
+            return self.LOSS_REWARD + self.ATTRITION_SCALE * enemy_attrition
 
     def step(self, action: Strategy):
         """
@@ -456,12 +516,8 @@ class CombatEnv:
     # -- helpers -----------------------------------------------------------
 
     def _outcome_won(self) -> bool:
-        """Return True if the trained team won the last episode."""
-        return any(
-            c.is_alive()
-            for _, c in self.cm.initiative.initiative_order
-            if c.team == self.trained_team
-        )
+        """Return True only on a clear victory (not a timeout survival)."""
+        return getattr(self, "_won", False)
 
     def _damage_reward(self) -> float:
         """Reward proportional to HP damage dealt to enemies since last call."""
@@ -561,6 +617,22 @@ class TrainingLog:
             data = json.load(f)
         log = cls(name=data.get("name", path))
         log.episodes = data.get("entries", [])
+        return log
+
+    @classmethod
+    def load_csv(cls, path: str) -> "TrainingLog":
+        import csv, os
+        name = os.path.splitext(os.path.basename(path))[0]
+        log = cls(name=name)
+        with open(path, newline="") as f:
+            for row in csv.DictReader(f):
+                entry = {}
+                for k, v in row.items():
+                    try:
+                        entry[k] = int(v) if v == str(int(float(v))) else float(v)
+                    except (ValueError, OverflowError):
+                        entry[k] = v
+                log.episodes.append(entry)
         return log
 
     # ── Plotting ──────────────────────────────────────────────────────
@@ -684,6 +756,67 @@ class TrainingLog:
 
 
 # ---------------------------------------------------------------------------
+# Module-level worker functions (must be at top-level for multiprocessing)
+# ---------------------------------------------------------------------------
+
+def _rl_train_worker(args):
+    """Run a complete independent RL training run and return the final Q-table."""
+    import io, contextlib
+    scenario_data, team, n_episodes, n_bins, alpha, gamma, \
+        eps, eps_min, eps_decay, worker_id, progress_queue, report_every = args
+    env = CombatEnv(scenario_data=scenario_data, trained_team=team, silent=True)
+    sel = RLStrategySelector(n_bins=n_bins, alpha=alpha, gamma=gamma,
+                             eps=eps, eps_min=eps_min, eps_decay=eps_decay)
+    trajectory = []
+
+    def _instrumented_select(obs):
+        action = sel.__class__.select(sel, obs)
+        trajectory.append((list(obs), action))
+        return action
+
+    sel.select = _instrumented_select
+
+    ep_rewards  = []
+    ep_wins     = []
+    ep_epsilons = []
+
+    with contextlib.redirect_stdout(io.StringIO()):
+        for ep in range(n_episodes):
+            trajectory.clear()
+            shaped = env.run_episode(selector=sel)
+            G      = env._outcome_reward()
+            won    = env._outcome_won()
+            for obs, action in reversed(trajectory):
+                sel.update(obs, action, G, obs, done=True)
+                G *= sel.gamma
+            sel.decay_epsilon()
+            ep_rewards.append(shaped)
+            ep_wins.append(int(won))
+            ep_epsilons.append(round(sel.eps, 4))
+            if progress_queue is not None and (ep + 1) % report_every == 0:
+                progress_queue.put((worker_id, ep + 1))
+
+    if progress_queue is not None:
+        progress_queue.put((worker_id, n_episodes))  # final
+    return sel.Q, ep_rewards, ep_wins, ep_epsilons
+
+
+def _evo_fitness_worker(args):
+    """Evaluate one evolutionary individual and return its win-rate."""
+    import io, contextlib
+    scenario_data, W, team, combats_per_ind = args
+    env = CombatEnv(scenario_data=scenario_data, trained_team=team, silent=True)
+    sel = EvolutionarySelector()
+    sel.W = np.array(W, dtype=np.float32)
+    wins = 0
+    with contextlib.redirect_stdout(io.StringIO()):
+        for _ in range(combats_per_ind):
+            if env.run_episode(selector=sel) > 0:
+                wins += 1
+    return wins / combats_per_ind
+
+
+# ---------------------------------------------------------------------------
 # StrategyTrainer
 # ---------------------------------------------------------------------------
 
@@ -708,6 +841,7 @@ class StrategyTrainer:
         verbose:     bool = True,
         print_every: int  = 50,
         log: "TrainingLog | None" = None,
+        workers:     int  = 1,
     ) -> list[float]:
         """
         RL training via episode-level Monte Carlo Q updates.
@@ -717,6 +851,91 @@ class StrategyTrainer:
         """
         assert isinstance(self.selector, RLStrategySelector), \
             "train_rl requires an RLStrategySelector"
+
+        if workers > 1:
+            import multiprocessing
+            import time
+            from concurrent.futures import ProcessPoolExecutor, FIRST_COMPLETED
+            from concurrent.futures import wait as fut_wait
+
+            chunk = n_episodes // workers
+            remainder = n_episodes % workers
+            chunks = [chunk + (1 if i < remainder else 0) for i in range(workers)]
+            sel = self.selector
+            report_every = max(50, chunks[0] // 40)
+
+            # Manager().Queue() creates a proxy-backed queue that survives
+            # pickle, unlike multiprocessing.Queue which asserts it must only
+            # be shared via inheritance (fork), not via ProcessPoolExecutor.
+            _mgr = multiprocessing.Manager()
+            progress_queue = _mgr.Queue()
+
+            tasks = [
+                (self.env.scenario_data, self.env.trained_team,
+                 c, sel.disc.n_bins, sel.alpha, sel.gamma,
+                 sel.eps, sel.eps_min, sel.eps_decay,
+                 i, progress_queue, report_every)
+                for i, c in enumerate(chunks)
+            ]
+            print(f"  [RL] Parallel training: {workers} independent runs × "
+                  f"~{chunks[0]} eps = {n_episodes} total")
+
+            # worker_id → (Q, ep_rewards, ep_wins, ep_epsilons)
+            worker_results  = {}
+            future_to_wid   = {}
+            worker_progress = [0] * workers
+            t0 = time.perf_counter()
+
+            if log is not None:
+                log.start()
+
+            with ProcessPoolExecutor(max_workers=workers) as pool:
+                futures = [pool.submit(_rl_train_worker, t) for t in tasks]
+                for i, f in enumerate(futures):
+                    future_to_wid[id(f)] = i
+                pending = set(futures)
+
+                while pending:
+                    done_now, pending = fut_wait(pending, timeout=0.3,
+                                                 return_when=FIRST_COMPLETED)
+                    for fut in done_now:
+                        wid = future_to_wid[id(fut)]
+                        worker_results[wid] = fut.result()
+
+                    # Drain all queued progress reports
+                    while True:
+                        try:
+                            wid, ep = progress_queue.get_nowait()
+                            worker_progress[wid] = ep
+                        except Exception:
+                            break
+
+                    elapsed = time.perf_counter() - t0
+                    parts = [
+                        f"W{i}:{worker_progress[i]/chunks[i]:5.1%}"
+                        for i in range(workers)
+                    ]
+                    n_done = len(worker_results)
+                    print(f"\r    {' | '.join(parts)}  "
+                          f"[{n_done}/{workers} done]  {elapsed:.0f}s",
+                          end="", flush=True)
+
+            _mgr.shutdown()
+            print()
+            q_tables = [worker_results[i][0] for i in range(workers)]
+            self.selector.Q   = np.mean(q_tables, axis=0).astype(np.float32)
+            self.selector.eps = self.selector.eps_min
+            print(f"  [RL] Averaged {workers} Q-tables → ε={self.selector.eps:.3f}")
+
+            # Only log worker 0's episodes — a single honest convergence curve.
+            # All workers start from the same hyperparams so W0 is representative.
+            if log is not None:
+                ep_r, ep_w, ep_e = worker_results[0][1:]
+                for i, (r, w, e) in enumerate(zip(ep_r, ep_w, ep_e)):
+                    log.record(episode=i + 1, reward=r, win=w, epsilon=e)
+                print(f"\n  {log.summary()}")
+
+            return worker_results[0][1]  # W0 rewards
 
         if log is not None:
             log.start()
@@ -736,17 +955,12 @@ class StrategyTrainer:
             total = self.env.run_episode(selector=self.selector)
             episode_rewards.append(total)
 
-            # Use the real combat outcome, not "shaped reward > 0".
-            # Damage shaping can push a losing episode's reward positive,
-            # which would teach the Q-table that losing while dealing damage
-            # is as good as winning.
             won = self.env._outcome_won()
 
-            # Q-updates use the binary win/loss signal only.
-            # The shaped 'total' is kept for logging so convergence plots
-            # still show the full reward curve, but it does not influence
-            # what the Q-table learns.
-            G = self.env.WIN_REWARD if won else self.env.LOSS_REWARD
+            # Use fractional outcome reward for Q-updates so the table learns
+            # that timeout-survival and high-attrition losses are better than
+            # dying quickly, while still keeping clear wins as the top signal.
+            G = self.env._outcome_reward()
             for obs, action in reversed(trajectory):
                 self.selector.update(obs, action, G, obs, done=True)
                 G *= self.selector.gamma
@@ -784,6 +998,7 @@ class StrategyTrainer:
         combats_per_ind: int  = 10,
         verbose:         bool = True,
         log: "TrainingLog | None" = None,
+        workers:         int  = 1,
     ) -> list[float]:
         """
         Evolutionary training. Each individual is a weight matrix scored
@@ -801,17 +1016,52 @@ class StrategyTrainer:
 
         best_per_gen = []
 
+        if workers > 1:
+            import time
+            from concurrent.futures import ProcessPoolExecutor, as_completed
+            _pool = ProcessPoolExecutor(max_workers=workers)
+        else:
+            _pool = None
+
         for gen in range(n_gens):
             fitness = []
 
-            for idx in range(self.selector.pop_sz):
-                self.selector.deploy_individual(idx)
-                wins = 0
-                for _ in range(combats_per_ind):
-                    reward = self.env.run_episode(selector=self.selector)
-                    if reward > 0:
-                        wins += 1
-                fitness.append(wins / combats_per_ind)
+            if _pool is not None:
+                pop_sz   = self.selector.pop_sz
+                fut_map  = {
+                    _pool.submit(_evo_fitness_worker,
+                                 (self.env.scenario_data,
+                                  self.selector.get_individual(idx).tolist(),
+                                  self.env.trained_team, combats_per_ind)): idx
+                    for idx in range(pop_sz)
+                }
+                fitness  = [0.0] * pop_sz
+                done     = 0
+                best_so_far = 0.0
+                t0 = time.perf_counter()
+                print(f"  [Evo] gen {gen+1}/{n_gens}")
+                for fut in as_completed(fut_map):
+                    fitness[fut_map[fut]] = fut.result()
+                    best_so_far = max(best_so_far, fut.result())
+                    done += 1
+                    pct     = done / pop_sz
+                    bar     = ("█" * int(pct * 25)).ljust(25)
+                    elapsed = time.perf_counter() - t0
+                    eta     = elapsed / done * (pop_sz - done) if done < pop_sz else 0
+                    print(f"\r    [{bar}] {done}/{pop_sz} individuals  "
+                          f"best so far: {best_so_far:.1%}  "
+                          f"elapsed: {elapsed:.0f}s  eta: {eta:.0f}s",
+                          end="", flush=True)
+                print()
+            else:
+                for idx in range(self.selector.pop_sz):
+                    self.selector.deploy_individual(idx)
+                    wins = 0
+                    for _ in range(combats_per_ind):
+                        reward = self.env.run_episode(selector=self.selector)
+                        if reward > 0:
+                            wins += 1
+                    fitness.append(wins / combats_per_ind)
 
             best      = max(fitness)
             mean_elite = float(np.mean(sorted(fitness)[-self.selector.elite_n:]))
@@ -833,6 +1083,8 @@ class StrategyTrainer:
                     f"mean={np.mean(fitness):.2%}"
                 )
 
+        if _pool is not None:
+            _pool.shutdown(wait=False)
         if log is not None:
             print(f"\n  {log.summary()}")
         return best_per_gen

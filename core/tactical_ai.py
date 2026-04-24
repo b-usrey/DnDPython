@@ -72,27 +72,35 @@ class TacticalDecision:
     def __init__(
         self,
         target=None,
-        move_to=None,
+        path=None,           # list of (col, row) squares to walk — empty = no move
         weapon=None,
         skip: bool = False,
         reason: str = "",
         use_dash: bool = False,
+        use_dodge: bool = False,
     ):
-        self.target   = target
-        self.move_to  = move_to
-        self.weapon   = weapon
-        self.skip     = skip
-        self.reason   = reason
-        self.use_dash = use_dash   # spend action to double movement this turn
+        self.target    = target
+        self.path      = path or []
+        self.weapon    = weapon
+        self.skip      = skip
+        self.reason    = reason
+        self.use_dash  = use_dash
+        self.use_dodge = use_dodge
+
+    @property
+    def move_to(self):
+        """Final destination square, or None if no movement planned."""
+        return self.path[-1] if self.path else None
 
     def __repr__(self):
         if self.skip:
             return f"TacticalDecision(skip, reason={self.reason!r})"
         dash_str = " [DASH]" if self.use_dash else ""
+        steps = len(self.path)
         return (
             f"TacticalDecision("
             f"target={self.target.name if self.target else None!r}, "
-            f"move_to={self.move_to}, "
+            f"path={steps} steps → {self.move_to}, "
             f"weapon={self.weapon.name if self.weapon else None!r}"
             f"{dash_str})"
         )
@@ -106,19 +114,23 @@ class TacticalAI:
     """
     Tactical AI controller. Instantiate once and call plan_turn() each turn.
 
-    Tactical logic:
-      - Focus the weakest enemy (lowest current HP) — reduces the number
-        of incoming attacks fastest
-      - Use ranged weapon when target is beyond melee reach and we have one
-      - Move toward target if using melee (close the gap)
-      - Maintain optimal ranged distance if using ranged (stay at normal_range,
-        back away if enemy closes in)
-      - Disengage logic: if below 25% HP and an ally is alive, move away
-        from the strongest threat instead of attacking
+    Pass strategy_selector=RLStrategySelector() or EvolutionarySelector()
+    to enable ML-driven strategy selection. When a selector is present,
+    plan_turn() calls selector.select(obs) each turn to choose between
+    AGGRESSIVE, KITE, and RETREAT, then executes accordingly.
+    Without a selector, the rule-based fallback applies.
     """
 
-    DISENGAGE_THRESHOLD = 0.25   # fraction of max HP below which we consider retreating
-    KITE_DISTANCE = 3             # squares — preferred distance when kiting ranged
+    DISENGAGE_THRESHOLD = 0.25
+    KITE_DISTANCE = 3
+
+    def __init__(self, strategy_selector=None, trained_team=None):
+        self.strategy_selector = strategy_selector
+        # trained_team gates the selector so it only fires for creatures
+        # on that team.  None means "apply to all" (training mode).
+        self.trained_team = trained_team
+        # current_strategy can also be set externally by StrategyTrainer
+        self.current_strategy = None
 
     def plan_turn(
         self,
@@ -153,78 +165,248 @@ class TacticalAI:
 
         weapon = self._pick_weapon(creature, target, weapons, battle_map)
 
-        # ── 3. Decide movement ─────────────────────────────────────────
-        move_to = None
+        # ── 3. Resolve strategy ────────────────────────────────────────
+        # Priority: selector > externally-set current_strategy > rule-based
+        # The selector is only applied to the trained team.  Without this
+        # guard, a goblin Q-table attached to cm.ai would also control
+        # Brendiir and Thando, making them fight like goblins.
+        strategy = None
+        team_matches = (
+            self.trained_team is None or
+            creature.team == self.trained_team
+        )
+        if self.strategy_selector is not None and memory is not None and team_matches:
+            allies = [
+                c for c in battle_map.all_creatures()
+                if c.team == creature.team and c is not creature and c.is_alive()
+            ]
+            obs      = memory.get_state_vector(creature, enemies, allies)
+            strategy = self.strategy_selector.select(obs)
+        elif self.current_strategy is not None:
+            strategy = self.current_strategy
 
-        # Disengage check — badly hurt and there's an ally still up
-        # With memory: also retreat from the highest-threat enemy, not just target
-        if self._should_disengage(creature, battle_map):
-            # If we have memory, retreat from the most dangerous enemy
-            retreat_from = target
-            if memory:
-                scored = [(e, memory.threat_level(e)) for e in enemies]
-                highest_threat = max(scored, key=lambda x: x[1])[0]
-                if memory.threat_level(highest_threat) > 0:
-                    retreat_from = highest_threat
-            move_to = self._retreat_square(creature, retreat_from, battle_map)
-            range_ok = battle_map.check_attack_range(
-                creature, target,
-                is_ranged=weapon.is_ranged,
-                normal_range=weapon.normal_range,
-                long_range=weapon.long_range,
-            )
-            if not range_ok:
-                weapon = None
-            return TacticalDecision(
-                target=target,
-                move_to=move_to,
-                weapon=weapon,
-                reason="disengaging — low HP",
-            )
+        # ── 4. Decide movement path ────────────────────────────────────
+        path = []
 
-        if weapon.is_ranged:
-            move_to = self._ranged_move(creature, target, weapon, battle_map)
+        # RETREAT strategy — always disengage regardless of HP threshold
+        if strategy is not None:
+            from core.ml_strategy import Strategy as Strat
+            if strategy == Strat.RETREAT:
+                retreat_from = target
+                if memory:
+                    scored = [(e, memory.threat_level(e)) for e in enemies]
+                    highest_threat = max(scored, key=lambda x: x[1])[0]
+                    if memory.threat_level(highest_threat) > 0:
+                        retreat_from = highest_threat
+                path = self._retreat_square(creature, retreat_from, battle_map)
+                range_ok = battle_map.check_attack_range(
+                    creature, target,
+                    is_ranged=weapon.is_ranged,
+                    normal_range=weapon.normal_range,
+                    long_range=weapon.long_range,
+                )
+                if not range_ok:
+                    weapon = None
+                return TacticalDecision(
+                    target=target, path=path, weapon=weapon,
+                    reason=f"strategy: RETREAT",
+                )
+            elif strategy == Strat.AGGRESSIVE:
+                path = self._melee_move(creature, target, battle_map)
+            elif strategy == Strat.KITE:
+                path = self._ranged_move(creature, target, weapon, battle_map)
+            elif strategy == Strat.FOCUS_FIRE:
+                # Ignore distance — charge the lowest-HP enemy to finish them fast
+                focus_target = min(enemies, key=lambda e: e.hp)
+                path         = self._melee_move(creature, focus_target, battle_map)
+                target       = focus_target
+            elif strategy == Strat.PROTECT:
+                # Move to support the most-pressured living ally
+                under_pressure = [
+                    c for c in battle_map.all_creatures()
+                    if c.team == creature.team
+                    and c is not creature
+                    and c.is_alive()
+                    and memory
+                    and memory.ally_under_pressure(c)
+                ]
+                if under_pressure:
+                    ally_to_help = min(under_pressure, key=lambda a: a.hp)
+                    ally_pos     = battle_map.get_position(ally_to_help)
+                    origin_c     = battle_map.get_position(creature)
+                    if origin_c and ally_pos:
+                        path = self._path_toward(
+                            origin_c, ally_pos, creature.speed, battle_map,
+                            creature=creature, stop_adjacent=True
+                        )
+            # After strategy overrides movement, still fall through to dash check
         else:
-            move_to = self._melee_move(creature, target, battle_map)
-            if move_to is not None:
+            # Rule-based disengage
+            if self._should_disengage(creature, battle_map):
+                retreat_from = target
+                if memory:
+                    scored = [(e, memory.threat_level(e)) for e in enemies]
+                    highest_threat = max(scored, key=lambda x: x[1])[0]
+                    if memory.threat_level(highest_threat) > 0:
+                        retreat_from = highest_threat
+                path = self._retreat_square(creature, retreat_from, battle_map)
+                range_ok = battle_map.check_attack_range(
+                    creature, target,
+                    is_ranged=weapon.is_ranged,
+                    normal_range=weapon.normal_range,
+                    long_range=weapon.long_range,
+                )
+                if not range_ok:
+                    weapon = None
+                return TacticalDecision(
+                    target=target, path=path, weapon=weapon,
+                    reason="disengaging — low HP",
+                )
+
+        # Default movement when no strategy overrides (or strategy is AGGRESSIVE/KITE
+        # but path is still empty because we didn't enter those branches)
+        if not path:
+            if weapon.is_ranged:
+                path = self._ranged_move(creature, target, weapon, battle_map)
+            else:
+                path = self._melee_move(creature, target, battle_map)
+            if path:
+                dest = path[-1]
                 target_pos = battle_map.get_position(target)
                 if target_pos:
                     dist_after = max(
-                        abs(move_to[0] - target_pos[0]),
-                        abs(move_to[1] - target_pos[1]),
+                        abs(dest[0] - target_pos[0]),
+                        abs(dest[1] - target_pos[1]),
                     ) * 5
                     if dist_after > weapon.normal_range:
+                        # Still out of range after moving — null weapon so
+                        # no attack action is spent, but keep the path so
+                        # the creature keeps advancing each turn.
                         weapon = None
 
-        # ── 4. Dash if no weapon can reach after normal movement ────────
-        use_dash = False
+        # ── 4. Dash / Dodge when target is out of reach ──────────
+        use_dash  = False
+        use_dodge = False
 
         if weapon is None:
+            origin     = battle_map.get_position(creature)
+            target_pos = battle_map.get_position(target)
+
+            # Ensure we have a normal-speed advance path.
+            if not path and not any(w.is_ranged for w in weapons):
+                if origin and target_pos:
+                    path = self._path_toward(
+                        origin, target_pos, creature.speed, battle_map,
+                        creature=creature, stop_adjacent=True
+                    )
+
             if self._can_reach_with_dash(creature, target, battle_map):
+                # Dash gets us adjacent this turn — always worth it.
                 use_dash = True
-                move_to  = self._melee_move_dashed(creature, target, battle_map)
-                # Re-check weapon reach after dashing
-                for w in weapons:
-                    target_pos = battle_map.get_position(target)
-                    if move_to and target_pos:
+                path     = self._melee_move_dashed(creature, target, battle_map)
+                if path and target_pos:
+                    dest = path[-1]
+                    for w in weapons:
                         dist_after = max(
-                            abs(move_to[0] - target_pos[0]),
-                            abs(move_to[1] - target_pos[1]),
+                            abs(dest[0] - target_pos[0]),
+                            abs(dest[1] - target_pos[1]),
                         ) * 5
                         if dist_after <= w.normal_range:
                             weapon = w
                             break
+            elif origin and target_pos:
+                # Cannot reach even with a Dash.  Compare how far a dash
+                # path goes vs normal movement.  If dashing covers at least
+                # one extra square, spend the action dashing to advance
+                # faster.  Otherwise take Dodge — imposing disadvantage on
+                # incoming attacks is more useful than an empty action when
+                # a wall or terrain is blocking progress this turn.
+                dash_path      = self._path_toward(
+                    origin, target_pos, creature.speed * 2, battle_map,
+                    creature=creature, stop_adjacent=True
+                )
+                if len(dash_path) > len(path):
+                    use_dash = True
+                    path     = dash_path
+                else:
+                    # Dashing adds no extra squares — Dodge instead.
+                    use_dodge = True
 
         reason = "standard attack"
-        if use_dash: reason = "dash to close distance"
+        if use_dash:  reason = "dash to close distance"
+        if use_dodge: reason = "dodge — can't reach target"
 
         return TacticalDecision(
             target=target,
-            move_to=move_to,
+            path=path,
             weapon=weapon,
             use_dash=use_dash,
+            use_dodge=use_dodge,
             reason=reason,
         )
+
+    # ------------------------------------------------------------------
+    # Hit probability and damage helpers
+    # ------------------------------------------------------------------
+
+    def _hit_probability(
+        self,
+        weapon: "WeaponProfile",
+        target,
+        advantage: bool = False,
+        disadvantage: bool = False,
+    ) -> float:
+        """
+        P(hit) against target's AC given weapon's total attack bonus.
+        Advantage/disadvantage are applied combinatorially per 5e rules.
+        Clamped to [0.05, 0.95]: a 1 always misses, a 20 always hits.
+        """
+        needed       = target.ac - weapon.attack_bonus
+        p_straight   = (21 - max(1, min(20, needed))) / 20.0
+        if advantage and not disadvantage:
+            return 1.0 - (1.0 - p_straight) ** 2
+        if disadvantage and not advantage:
+            return p_straight ** 2
+        return max(0.05, min(0.95, p_straight))
+
+    def _expected_damage(self, weapon: "WeaponProfile") -> float:
+        """
+        Expected damage per successful hit = avg die roll + damage modifier.
+        Parses weapon.damage_die string (e.g. '2d6').
+        """
+        try:
+            num, sides = weapon.damage_die.split("d")
+            avg_roll   = int(num) * (int(sides) + 1) / 2.0
+        except (ValueError, AttributeError):
+            avg_roll = 3.5   # fallback: 1d6 average
+        return avg_roll + weapon.damage_mod
+
+    def _best_hit_probability(
+        self,
+        creature,
+        target,
+        battle_map,
+    ) -> float:
+        """
+        Hit probability of the creature's best in-range weapon against target,
+        accounting for ranged disadvantage from melee proximity.
+        Returns 0.0 if no weapon can reach the target.
+        """
+        weapons = self._get_weapon_profiles(creature)
+        best    = 0.0
+        for w in weapons:
+            rr = battle_map.check_attack_range(
+                creature, target,
+                is_ranged=w.is_ranged,
+                normal_range=w.normal_range,
+                long_range=w.long_range,
+            )
+            if not rr.valid:
+                continue
+            best = max(best, self._hit_probability(
+                w, target, disadvantage=rr.disadvantage
+            ))
+        return best
 
     # ------------------------------------------------------------------
     # Target selection
@@ -247,14 +429,21 @@ class TacticalAI:
             if recommended is not None:
                 return recommended
 
-        # Original fallback — weakest enemy, tiebreak closest
+        # Fallback: melee-only creatures chase the closest enemy so they
+        # advance on a reachable target rather than fixating on a low-HP
+        # enemy a ranged ally is already finishing across the map.
+        # Ranged creatures keep weakest-first since distance is less relevant.
+        weapons = self._get_weapon_profiles(creature)
+        has_ranged = any(w.is_ranged for w in weapons)
+
         def priority(enemy):
-            hp = enemy.hp
             try:
                 dist = battle_map.distance_between(creature, enemy)
             except LookupError:
                 dist = 9999
-            return (hp, dist)
+            if has_ranged:
+                return (enemy.hp, dist)   # weakest first, tiebreak closest
+            return (dist, enemy.hp)        # closest first, tiebreak weakest
 
         return min(enemies, key=priority)
 
@@ -274,15 +463,29 @@ class TacticalAI:
         for item in creature.equipped_items:
             if item.item_type != "weapon":
                 continue
-            is_ranged = getattr(item, "attack_type", "melee") == "range"
-            # Parse range from item properties if present
+            is_ranged    = getattr(item, "attack_type", "melee") == "range"
             normal_range, long_range = self._parse_item_range(item, is_ranged)
+            # Compute the full to-hit modifier the same way Attack.__init__ does
+            # so that hit_probability calculations are accurate for item weapons.
+            ability   = getattr(item, "ability", "Str")
+            atk_bonus = (
+                creature.statblock.mods.get(ability, 0)
+                + getattr(item, "attack_bonus", 0)
+                + creature.proficiency
+            )
+            dmg_bonus = (
+                creature.statblock.mods.get(ability, 0)
+                + getattr(item, "damage_bonus", 0)
+            )
             profiles.append(WeaponProfile(
                 name=item.name,
                 is_ranged=is_ranged,
                 normal_range=normal_range,
                 long_range=long_range,
                 item=item,
+                attack_bonus=atk_bonus,
+                damage_die=getattr(item, "damage_die", "1d6"),
+                damage_mod=dmg_bonus,
             ))
 
         # Raw monster attack list (for creatures built from templates)
@@ -368,25 +571,21 @@ class TacticalAI:
         creature: Creature,
         target: Creature,
         battle_map: BattleMap,
-    ) -> tuple[int, int] | None:
+    ) -> list[tuple[int, int]]:
         """
-        Move as close as possible to the target within the creature's speed,
-        stopping one square away (adjacent) if possible.
-        Returns the destination square, or None if already adjacent.
+        Return the path toward target within the creature's speed budget (feet).
+        Stops one square away (melee). Returns [] if already adjacent.
         """
         if battle_map.is_in_melee_range(creature, target):
-            return None   # already in melee, no need to move
-
+            return []
         origin = battle_map.get_position(creature)
         target_pos = battle_map.get_position(target)
         if not origin or not target_pos:
-            return None
-
-        speed_squares = creature.speed // 5
-        best = self._step_toward(
-            origin, target_pos, speed_squares, battle_map, stop_adjacent=True
+            return []
+        return self._path_toward(
+            origin, target_pos, creature.speed, battle_map,
+            creature=creature, stop_adjacent=True
         )
-        return best if best != origin else None
 
     def _ranged_move(
         self,
@@ -394,57 +593,64 @@ class TacticalAI:
         target: Creature,
         weapon: WeaponProfile,
         battle_map: BattleMap,
-    ) -> tuple[int, int] | None:
+    ) -> list[tuple[int, int]]:
         """
-        Maintain optimal ranged distance.
-
-        - If an enemy is adjacent (in melee): back away to KITE_DISTANCE squares
-        - If target is beyond normal range: close until within normal range
-        - Otherwise: stay put
+        Return the path to maintain optimal ranged distance.
+        - Back away if enemy is adjacent
+        - Close in if target is beyond normal range
+        - Stay put otherwise (empty path)
         """
         origin = battle_map.get_position(creature)
         target_pos = battle_map.get_position(target)
         if not origin or not target_pos:
-            return None
+            return []
 
         try:
-            dist_squares = battle_map.distance_between(creature, target) // 5
+            dist_ft = battle_map.distance_between(creature, target)
         except LookupError:
-            return None
-
-        speed_squares = creature.speed // 5
+            return []
 
         # Back away if enemy is adjacent
         if battle_map._attacker_is_in_melee(creature):
-            best = self._step_away(
-                origin, target_pos, speed_squares, battle_map
+            dest = self._step_away(
+                origin, target_pos, creature.speed // 5, battle_map
             )
-            return best if best != origin else None
-
-        # Close in if target is beyond normal range
-        normal_squares = weapon.normal_range // 5
-        if dist_squares > normal_squares:
-            best = self._step_toward(
-                origin, target_pos, speed_squares, battle_map, stop_adjacent=False
+            if dest == origin:
+                return []
+            return self._path_toward(
+                origin, dest, creature.speed, battle_map,
+                creature=creature, stop_adjacent=False
             )
-            return best if best != origin else None
 
-        return None   # already at good distance
+        # Close in if beyond normal range.
+        # stop_adjacent=True so the goblin stops one square away from the
+        # target rather than trying to land on their square.
+        if dist_ft > weapon.normal_range:
+            return self._path_toward(
+                origin, target_pos, creature.speed, battle_map,
+                creature=creature, stop_adjacent=True
+            )
+
+        return []   # already at good distance
 
     def _retreat_square(
         self,
         creature: Creature,
         threat: Creature,
         battle_map: BattleMap,
-    ) -> tuple[int, int] | None:
-        """Move away from the primary threat."""
+    ) -> list[tuple[int, int]]:
+        """Return path moving away from the primary threat."""
         origin = battle_map.get_position(creature)
         threat_pos = battle_map.get_position(threat)
         if not origin or not threat_pos:
-            return None
-        speed_squares = creature.speed // 5
-        best = self._step_away(origin, threat_pos, speed_squares, battle_map)
-        return best if best != origin else None
+            return []
+        dest = self._step_away(origin, threat_pos, creature.speed // 5, battle_map)
+        if dest == origin:
+            return []
+        return self._path_toward(
+            origin, dest, creature.speed, battle_map,
+            creature=creature, stop_adjacent=False
+        )
 
     def _can_reach_with_dash(
         self,
@@ -455,146 +661,193 @@ class TacticalAI:
         """
         Return True if spending the action on Dash (double speed) would
         bring the creature into melee range of target this turn.
+        Uses cost-aware pathfinding so difficult terrain is respected.
         """
         origin = battle_map.get_position(creature)
         target_pos = battle_map.get_position(target)
         if not origin or not target_pos:
             return False
-        dash_squares = (creature.speed * 2) // 5
-        dest = self._step_toward(origin, target_pos, dash_squares, battle_map,
-                                 stop_adjacent=True)
+        path = self._path_toward(
+            origin, target_pos, creature.speed * 2, battle_map,
+            creature=creature, stop_adjacent=True
+        )
+        if not path:
+            return False
+        dest = path[-1]
         dist_after = max(abs(dest[0] - target_pos[0]),
                          abs(dest[1] - target_pos[1])) * 5
-        return dist_after <= 5   # adjacent = in melee reach
+        return dist_after <= 5
 
     def _melee_move_dashed(
         self,
         creature,
         target,
         battle_map,
-    ) -> tuple[int, int] | None:
-        """
-        Return the best destination using double speed (Dash action).
-        """
+    ) -> list[tuple[int, int]]:
+        """Return the path using double speed (Dash action)."""
         origin = battle_map.get_position(creature)
         target_pos = battle_map.get_position(target)
         if not origin or not target_pos:
-            return None
-        dash_squares = (creature.speed * 2) // 5
-        best = self._step_toward(origin, target_pos, dash_squares, battle_map,
-                                 stop_adjacent=True)
-        return best if best != origin else None
+            return []
+        return self._path_toward(
+            origin, target_pos, creature.speed * 2, battle_map,
+            creature=creature, stop_adjacent=True
+        )
 
     # ------------------------------------------------------------------
     # Pathfinding helpers
     # ------------------------------------------------------------------
+
+    def _path_toward(
+        self,
+        origin: tuple[int, int],
+        dest: tuple[int, int],
+        budget_ft: int,
+        battle_map,
+        creature=None,
+        stop_adjacent: bool = True,
+    ) -> list[tuple[int, int]]:
+        """
+        Dijkstra pathfinding from origin toward dest within budget_ft feet.
+
+        Returns the list of squares walked (NOT including origin), up to the
+        movement budget. Each square's terrain cost is charged in feet so
+        difficult terrain (10ft/sq) correctly limits range.
+
+        Diagonal preference: cardinal moves are preferred over diagonals when
+        the terrain cost is otherwise equal. A tiny secondary key (0.001 *
+        diagonal_count) is added to the heap priority so Dijkstra picks
+        straight paths when there is a tie.
+
+        Occupied squares: allies are treated as passable (you can path through
+        a teammate's square) but cannot end your move on an occupied square.
+        Enemy squares are impassable unless they are the destination.
+
+        - stop_adjacent=True  stop one square away (melee approach)
+        - stop_adjacent=False  try to reach dest exactly (ranged/retreat)
+        """
+        import heapq
+
+        stop_threshold = 1 if stop_adjacent else 0
+
+        # Already at stop condition
+        cur_dist = max(abs(origin[0] - dest[0]), abs(origin[1] - dest[1]))
+        if cur_dist <= stop_threshold:
+            return []
+
+        # Determine the mover's team for ally/enemy distinction
+        mover_team = getattr(creature, "team", None) if creature else None
+
+        # Dijkstra state: (terrain_cost, diagonal_tiebreak, position, path)
+        heap = [(0, 0, origin, [])]
+        # visited maps pos -> (best_terrain_cost, best_diag_count)
+        visited: dict[tuple, tuple] = {}
+
+        best_path = []
+        best_dist = cur_dist
+        best_key  = (float("inf"), float("inf"))
+
+        while heap:
+            cost, diag, pos, path = heapq.heappop(heap)
+
+            key = (cost, diag)
+            if pos in visited and visited[pos] <= key:
+                continue
+            visited[pos] = key
+
+            for dc in (-1, 0, 1):
+                for dr in (-1, 0, 1):
+                    if dc == 0 and dr == 0:
+                        continue
+                    nc, nr = pos[0] + dc, pos[1] + dr
+                    npos = (nc, nr)
+
+                    if not battle_map._in_bounds(nc, nr):
+                        continue
+                    tile = battle_map.get_tile(nc, nr)
+                    if not tile.passable:
+                        continue
+
+                    # Diagonal corner-clip check: a diagonal move is only
+                    # legal if BOTH cardinal neighbours are passable.
+                    # Without this, creatures cut through wall corners.
+                    if dc != 0 and dr != 0:
+                        if not battle_map._in_bounds(pos[0]+dc, pos[1]) or \
+                           not battle_map.get_tile(pos[0]+dc, pos[1]).passable:
+                            continue
+                        if not battle_map._in_bounds(pos[0], pos[1]+dr) or \
+                           not battle_map.get_tile(pos[0], pos[1]+dr).passable:
+                            continue
+
+                    # Occupied square handling:
+                    #   - destination is always allowed
+                    #   - ally squares: can path THROUGH but not end on
+                    #   - enemy squares: impassable
+                    occupant = battle_map.get_creature_at(nc, nr)
+                    if occupant is not None and npos != dest:
+                        if mover_team and occupant.team != mover_team:
+                            continue   # enemy — blocked
+                        # ally — can pass through but track that we can't stop here
+
+                    # Terrain cost in feet
+                    sq_cost = battle_map.movement_cost_to(creature, nc, nr) if creature else tile.movement_cost
+                    new_cost = cost + sq_cost
+
+                    if new_cost > budget_ft:
+                        continue   # over budget
+                    new_diag = diag + (1 if dc != 0 and dr != 0 else 0)
+                    new_key  = (new_cost, new_diag)
+
+                    if npos in visited and visited[npos] <= new_key:
+                        continue
+
+                    new_path = path + [npos]
+                    d = max(abs(nc - dest[0]), abs(nr - dest[1]))
+
+                    # Can only stop here if the square is genuinely unoccupied.
+                    # Removing the "or npos == dest" exemption: that exemption
+                    # was intended to allow routing through the target area but
+                    # it also allowed creatures to LAND on occupied squares
+                    # (including the enemy's own square for KITE close-in and
+                    # any ally square chosen as a retreat destination).
+                    # Routing through dest for adjacency is still handled by
+                    # the occupant-blocking guard above (which skips the block
+                    # when npos==dest so Dijkstra can expand through it).
+                    can_stop = (occupant is None)
+
+                    # Track the best reachable stopping square within budget
+                    if can_stop:
+                        if d < best_dist or (d == best_dist and new_key < best_key):
+                            best_dist = d
+                            best_path = new_path
+                            best_key  = new_key
+
+                    # Reached stop condition on a stoppable square
+                    if d <= stop_threshold and can_stop:
+                        return new_path
+
+                    heapq.heappush(heap, (new_cost, new_diag, npos, new_path))
+
+        return best_path
 
     def _step_toward(
         self,
         origin: tuple[int, int],
         dest: tuple[int, int],
         max_steps: int,
-        battle_map: BattleMap,
+        battle_map,
         stop_adjacent: bool = True,
     ) -> tuple[int, int]:
         """
-        BFS pathfinding toward dest, following the path up to max_steps.
-
-        Correctly navigates around walls and impassable terrain.
-        If stop_adjacent=True, stops one square away (melee approach).
-        If the destination is unreachable, moves as close as possible.
-        Returns the final position after consuming up to max_steps moves.
+        Legacy single-destination wrapper around _path_toward.
+        max_steps is treated as a budget in squares (×5 = feet).
+        Returns the final square in the path, or origin if no path.
         """
-        from collections import deque
-
-        # If already at the stop condition, return immediately
-        cur_dist = max(abs(origin[0] - dest[0]), abs(origin[1] - dest[1]))
-        stop_threshold = 1 if stop_adjacent else 0
-        if cur_dist <= stop_threshold:
-            return origin
-
-        # BFS to find shortest path
-        queue   = deque([(origin, [origin])])
-        visited = {origin}
-
-        best_pos  = origin      # fallback: best reachable square
-        best_dist = cur_dist
-
-        while queue:
-            pos, path = queue.popleft()
-
-            # Check neighbours
-            for dc in (-1, 0, 1):
-                for dr in (-1, 0, 1):
-                    if dc == 0 and dr == 0:
-                        continue
-                    nc, nr = pos[0] + dc, pos[1] + dr
-                    npos = (nc, nr)
-                    if npos in visited:
-                        continue
-                    if not battle_map._in_bounds(nc, nr):
-                        continue
-                    tile = battle_map.get_tile(nc, nr)
-                    if not tile.passable:
-                        continue
-                    # Don't path through occupied squares (except destination)
-                    occupant = battle_map.get_creature_at(nc, nr)
-                    if occupant is not None and npos != dest:
-                        continue
-
-                    visited.add(npos)
-                    new_path = path + [npos]
-                    d = max(abs(nc - dest[0]), abs(nr - dest[1]))
-
-                    # Track the best reachable square
-                    if d < best_dist:
-                        best_dist = d
-                        best_pos  = npos
-
-                    # If we've reached the stop condition, follow path up to max_steps
-                    if d <= stop_threshold:
-                        # Return the square max_steps along this path
-                        # (new_path[0] is origin, new_path[1] is first step)
-                        target_idx = min(max_steps, len(new_path) - 1)
-                        return new_path[target_idx]
-
-                    queue.append((npos, new_path))
-
-                    # Cap BFS to avoid searching the entire map for huge maps
-                    if len(visited) > 2000:
-                        break
-                else:
-                    continue
-                break
-
-        # Destination unreachable — return max_steps along path toward best_pos
-        if best_pos == origin:
-            return origin
-
-        # Re-run BFS just toward best_pos to get the path
-        queue2  = deque([(origin, [origin])])
-        visited2 = {origin}
-        while queue2:
-            pos, path = queue2.popleft()
-            if pos == best_pos:
-                target_idx = min(max_steps, len(path) - 1)
-                return path[target_idx]
-            for dc in (-1, 0, 1):
-                for dr in (-1, 0, 1):
-                    if dc == 0 and dr == 0:
-                        continue
-                    nc, nr = pos[0] + dc, pos[1] + dr
-                    npos = (nc, nr)
-                    if npos in visited2:
-                        continue
-                    if not battle_map._in_bounds(nc, nr):
-                        continue
-                    if not battle_map.get_tile(nc, nr).passable:
-                        continue
-                    visited2.add(npos)
-                    queue2.append((npos, path + [npos]))
-
-        return origin
+        path = self._path_toward(
+            origin, dest, max_steps * 5, battle_map,
+            stop_adjacent=stop_adjacent
+        )
+        return path[-1] if path else origin
 
     def _step_away(
         self,

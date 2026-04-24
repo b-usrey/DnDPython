@@ -45,7 +45,16 @@ class Creature:
         self._max_hp = hp
         self._current_hp = hp
         self._temp_hp = 0
-        self.ac = ac
+
+        # ── AC — split into three independent components ──────────────────
+        # _armour_ac : base AC from body armour (or flat template value for monsters)
+        # _shield_ac : shield bonus (can change mid-combat)
+        # _misc_ac   : rings, spells, features (accumulates additively)
+        # self.ac is always kept in sync via compute_ac()
+        self._armour_ac: int = ac
+        self._shield_ac: int = 0
+        self._misc_ac:   int = 0
+        self.ac: int         = ac
 
         # ── Conditions (strings e.g. "prone", "poisoned") ─────────────────
         self.conditions = set()
@@ -68,13 +77,15 @@ class Creature:
         self.initiative_mod = 0
         self.initiative_advantage = False
         self.initiative_roll = None
-        self.concentration = None
+        self.concentration  = None   # name of active concentration effect
+        self._conc_feature  = None   # Feature to notify if concentration breaks
         self.speed = 30
 
         # ── Features & events ────────────────────────────────────────────
         self.features = []
         self.event_manager = event_manager
         self.event_manager.subscribe("damage", self._on_damage_event)
+        self.event_manager.subscribe("attack", self._on_attack_event)
 
     # ── HP properties ─────────────────────────────────────────────────────
 
@@ -94,27 +105,112 @@ class Creature:
     def is_alive(self):
         return self._current_hp > 0
 
+    # ── AC helpers ────────────────────────────────────────────────────────
+
+    def compute_ac(self) -> None:
+        """Recompute self.ac from the three stored components."""
+        self.ac = self._armour_ac + self._shield_ac + self._misc_ac
+
+    def apply_misc_ac(self, delta: int) -> None:
+        """
+        Add delta to the miscellaneous AC pool and recompute.
+        Called by features: Ring of Protection (+1), Shield spell (+5), etc.
+        Use a negative delta to remove a bonus when the effect ends.
+        """
+        self._misc_ac += delta
+        self.compute_ac()
+
+    def apply_shield(self, bonus: int) -> None:
+        """
+        Set the shield AC bonus and recompute.
+        Pass 0 to remove (e.g. shield dropped or Shield spell expired).
+        """
+        self._shield_ac = bonus
+        self.compute_ac()
+
     def take_damage(self, amount, damage_type=None):
         """
         Apply damage to this creature.
 
         Temp HP absorbs first, then current HP. Broadcasts
-        'creature_downed' if HP reaches 0. Returns actual damage dealt.
+        'creature_downed' if HP reaches 0.
+
+        If the creature is concentrating on a spell or feature, triggers
+        a CON saving throw (DC = max(10, damage // 2)). On failure,
+        concentration is broken.
+
+        Returns actual damage dealt.
         """
         if amount <= 0:
             return 0
 
         # Temp HP absorbs first
-        absorbed = min(self._temp_hp, amount)
+        absorbed  = min(self._temp_hp, amount)
         self._temp_hp -= absorbed
         remaining = amount - absorbed
 
+        was_alive = self._current_hp > 0
         self._current_hp = max(0, self._current_hp - remaining)
 
-        if self._current_hp == 0:
+        if was_alive and self._current_hp == 0:
             self._on_downed()
+        elif remaining > 0 and self._current_hp > 0 and self.concentration:
+            # Concentration check — only if damage actually reached HP
+            self._concentration_check(remaining)
 
         return amount
+
+    def _concentration_check(self, damage: int) -> None:
+        """
+        Roll a CON save to maintain concentration after taking damage.
+        DC = max(10, damage // 2).  Called automatically by take_damage.
+        """
+        from core.saving_throw import SavingThrow, DamageOnSave
+        dc = max(10, damage // 2)
+        print(f"  {self.name} concentration check (DC {dc}) — "
+              f"concentrating on {self.concentration}")
+        result = SavingThrow.roll(
+            caster      = self,
+            target      = self,
+            ability     = "Con",
+            dc          = dc,
+            on_save     = DamageOnSave.NONE,
+        )
+        if not result.success:
+            print(f"  {self.name} loses concentration on {self.concentration}!")
+            self.break_concentration()
+
+    # ── Concentration management ──────────────────────────────────────────
+
+    def start_concentration(self, name: str, feature=None) -> None:
+        """
+        Begin concentrating on an effect.
+
+        If already concentrating on something else, that effect is broken
+        first (a creature can only concentrate on one thing at a time).
+
+        Args:
+            name:    display name of the effect, e.g. "Favored Foe"
+            feature: optional Feature instance that will receive
+                     on_concentration_broken() if concentration drops
+        """
+        if self.concentration and self.concentration != name:
+            self.break_concentration()
+        self.concentration  = name
+        self._conc_feature  = feature
+
+    def break_concentration(self) -> None:
+        """
+        Drop concentration, notifying the feature if one was registered.
+        Safe to call even when not concentrating.
+        """
+        if not self.concentration:
+            return
+        feat = getattr(self, "_conc_feature", None)
+        if feat and hasattr(feat, "on_concentration_broken"):
+            feat.on_concentration_broken()
+        self.concentration = None
+        self._conc_feature = None
 
     def heal(self, amount):
         """Restore HP up to max. Returns amount actually healed."""
@@ -143,6 +239,27 @@ class Creature:
 
     # ── Damage event listener ─────────────────────────────────────────────
 
+    def _on_attack_event(self, data):
+        """
+        Apply advantage/disadvantage from invisible conditions.
+        Invisible attacker → advantage. Invisible target → disadvantage.
+        Both cancel out per 5e rules (handled in roll_to_hit).
+        """
+        attacker = data.get("attacker")
+        target   = data.get("target")
+        attack   = data.get("attack")
+        if not attack:
+            return
+        if attacker is self and self.has_condition("invisible"):
+            attack.advantage = True
+        if target is self and self.has_condition("invisible"):
+            attack.disadvantage = True
+        # Dodge action: attacks against a dodging creature have disadvantage
+        # (PHB p.192). The condition is removed at the start of the
+        # dodging creature's next turn via start_turn().
+        if target is self and self.has_condition("dodging"):
+            attack.disadvantage = True
+
     def _on_damage_event(self, data):
         """
         Subscribed to the 'damage' event. Applies resolved damage from an
@@ -157,8 +274,9 @@ class Creature:
         if damage is None:
             damage = attack.roll_damage()
         if damage and damage > 0:
+            print(f"{self.name} takes {damage} damage!")
             self.take_damage(damage)
-            print(f"{self.name} takes {damage} damage! ({self._current_hp}/{self._max_hp} HP remaining)")
+            print(f"  ({self._current_hp}/{self._max_hp} HP remaining)")
 
     # ── Conditions ────────────────────────────────────────────────────────
 
@@ -259,6 +377,8 @@ class Creature:
 
     def start_turn(self):
         self.actions.reset()
+        # Dodge effect expires at the start of the creature's next turn
+        self.remove_condition("dodging")
 
     # ── Attacks ───────────────────────────────────────────────────────────
 
