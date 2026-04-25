@@ -61,6 +61,7 @@ Quick start
 
 from __future__ import annotations
 
+import dataclasses
 import enum
 import io
 import contextlib
@@ -208,7 +209,7 @@ class EvolutionarySelector(StrategySelector):
         mutation_scale  weight noise std      0.1
     """
 
-    def __init__(self, n_features=9, pop_size=20,
+    def __init__(self, n_features=12, pop_size=20,
                  elite_frac=0.2, mutation_scale=0.1, crossover_rate=0.5):
         super().__init__()
         self.n_obs        = n_features
@@ -267,6 +268,50 @@ class EvolutionarySelector(StrategySelector):
 
 
 # ---------------------------------------------------------------------------
+# RewardConfig — scenario-configurable reward signal
+# ---------------------------------------------------------------------------
+
+@dataclasses.dataclass
+class RewardConfig:
+    """
+    All reward scalars in one place.  Loaded from the scenario JSON under
+    the optional "rewards" key; any omitted field falls back to its default.
+
+    Example scenario fragment:
+        "rewards": {
+            "win":             1.0,
+            "loss":           -1.0,
+            "timeout":         0.6,
+            "attrition_scale": 0.3,
+            "kill":            0.0,
+            "damage_scale":    0.0
+        }
+
+    Fields:
+        win             — clear victory (all enemies eliminated)
+        loss            — defeat
+        timeout         — base reward for surviving to max_rounds; scaled by
+                          surviving HP fraction inside CombatEnv
+        attrition_scale — how much enemy kills soften a loss  [0, 1]
+        step            — per-turn penalty (encourages efficiency)
+        kill            — shaped bonus per enemy downed (not used for Q-updates)
+        damage_scale    — shaped reward per HP of damage dealt (not Q-updates)
+    """
+    win:             float =  1.0
+    loss:            float = -1.0
+    timeout:         float =  0.4
+    attrition_scale: float =  0.5
+    step:            float = -0.01
+    kill:            float =  0.3
+    damage_scale:    float =  0.005
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "RewardConfig":
+        valid = {f.name for f in dataclasses.fields(cls)}
+        return cls(**{k: float(v) for k, v in d.items() if k in valid})
+
+
+# ---------------------------------------------------------------------------
 # CombatEnv — episode factory
 # ---------------------------------------------------------------------------
 
@@ -284,26 +329,28 @@ class CombatEnv:
         silent:         suppress all print output during training
     """
 
-    WIN_REWARD      =  1.0
-    LOSS_REWARD     = -1.0
-    TIMEOUT_REWARD  =  0.4   # base reward for lasting full max_rounds ("reinforcements")
-    ATTRITION_SCALE =  0.5   # how much enemy attrition softens a loss
-    STEP_REWARD     = -0.01  # small penalty per turn encourages efficiency
-    KILL_REWARD     =  0.3   # bonus per enemy downed
-    DAMAGE_SCALE    =  0.005 # reward per HP of damage dealt
-
     def __init__(
         self,
         scenario_data,
         trained_team: str = "red",
         silent: bool = True,
     ):
+        # Accept a single scenario dict/path or a list of dicts for
+        # multi-scenario training (reset() picks one at random each episode).
         if isinstance(scenario_data, str):
             with open(scenario_data) as f:
                 scenario_data = json.load(f)
-        self.scenario_data = scenario_data
+        if isinstance(scenario_data, dict):
+            self._scenarios = [scenario_data]
+        else:
+            self._scenarios = list(scenario_data)
+
+        self.scenario_data = self._scenarios[0]   # current episode's scenario
         self.trained_team  = trained_team
         self.silent        = silent
+        self.reward_cfg    = RewardConfig.from_dict(
+            self.scenario_data.get("rewards", {})
+        )
 
         # Set after reset()
         self.cm        = None
@@ -313,10 +360,14 @@ class CombatEnv:
 
     def reset(self):
         """
-        Build a fresh combat. Returns the initial obs vector for the
-        first creature of the trained team in initiative order, or
-        a zero vector if none are present.
+        Build a fresh combat. When multiple scenarios were supplied, picks
+        one at random so each episode trains on a different encounter.
+        Returns the initial obs vector for the first trained-team creature.
         """
+        self.scenario_data = random.choice(self._scenarios)
+        self.reward_cfg    = RewardConfig.from_dict(
+            self.scenario_data.get("rewards", {})
+        )
         # Import here to avoid circular imports at module load time
         from core.events import EventBus
         from core.battle_map import BattleMap
@@ -337,15 +388,16 @@ class CombatEnv:
 
         with ctx:
             players, monsters = loader.load(self.scenario_data)
-            for m in monsters:
-                mtype = next(
-                    (t.get("type","").upper()
-                     for t in self.scenario_data.get("monsters",[])
-                     if MONSTER_REGISTRY.get(t.get("type","").upper())),
-                    None
-                )
-                if mtype and mtype in MONSTER_REGISTRY:
-                    m._attack_templates = MONSTER_REGISTRY[mtype].get("attacks", [])
+            monster_idx = 0
+            for tmpl in self.scenario_data.get("monsters", []):
+                mtype = tmpl.get("type", "").upper()
+                count = tmpl.get("count", 1)
+                attacks = MONSTER_REGISTRY.get(mtype, {}).get("attacks", [])
+                for _ in range(count):
+                    if monster_idx >= len(monsters):
+                        break
+                    monsters[monster_idx]._attack_templates = attacks
+                    monster_idx += 1
 
             battle_map = build_map(self.scenario_data)
 
@@ -410,28 +462,25 @@ class CombatEnv:
         enemies_killed   = sum(1 for c in enemies if not c.is_alive())
         enemy_attrition  = enemies_killed / len(enemies) if enemies else 0.0
 
+        rc = self.reward_cfg
         if won and not timed_out:
-            # Clear victory — all enemies eliminated
-            reward = self.WIN_REWARD
+            reward = rc.win
         elif timed_out:
-            # Lasted to max_rounds ("reinforcements arrived")
-            # Scale by surviving HP fraction so healthier survival = better reward
             trained_alive = [c for c in survivors if c.team == self.trained_team]
             hp_fraction   = (sum(c.hp for c in trained_alive) /
                              sum(c.max_hp for c in trained_alive)) if trained_alive else 0.0
-            reward = self.TIMEOUT_REWARD * hp_fraction
+            reward = rc.timeout * hp_fraction
         else:
-            # Defeat — soften by how much attrition was dealt
-            reward = self.LOSS_REWARD + self.ATTRITION_SCALE * enemy_attrition
+            reward = rc.loss + rc.attrition_scale * enemy_attrition
 
         # ── Per-turn shaping: damage dealt + kills ───────────────────────
         # Returned for logging/convergence plots only.
         # train_rl() reads _outcome_reward() for Q-updates, not this value.
         for c in enemies:
             hp_lost = c.max_hp - c.hp
-            reward += hp_lost * self.DAMAGE_SCALE
+            reward += hp_lost * rc.damage_scale
             if not c.is_alive():
-                reward += self.KILL_REWARD
+                reward += rc.kill
 
         self._won      = won and not timed_out
         self._timed_out = timed_out
@@ -447,15 +496,16 @@ class CombatEnv:
         timed_out     = self.cm.timed_out
         enemies_killed = sum(1 for c in enemies if not c.is_alive())
         enemy_attrition = enemies_killed / len(enemies) if enemies else 0.0
+        rc = self.reward_cfg
         if won and not timed_out:
-            return self.WIN_REWARD
+            return rc.win
         elif timed_out:
             trained_alive = [c for c in survivors if c.team == self.trained_team]
             hp_fraction   = (sum(c.hp for c in trained_alive) /
                              sum(c.max_hp for c in trained_alive)) if trained_alive else 0.0
-            return self.TIMEOUT_REWARD * hp_fraction
+            return rc.timeout * hp_fraction
         else:
-            return self.LOSS_REWARD + self.ATTRITION_SCALE * enemy_attrition
+            return rc.loss + rc.attrition_scale * enemy_attrition
 
     def step(self, action: Strategy):
         """
@@ -467,7 +517,7 @@ class CombatEnv:
         if self._done:
             raise RuntimeError("Call reset() before step() after episode ends.")
 
-        reward = self.STEP_REWARD
+        reward = self.reward_cfg.step
 
         buf = io.StringIO()
         ctx = contextlib.redirect_stdout(buf) if self.silent else contextlib.nullcontext()
@@ -507,7 +557,7 @@ class CombatEnv:
             survivors = [c for _, c in self.cm.initiative.initiative_order
                          if c.is_alive()]
             won = any(c.team == self.trained_team for c in survivors)
-            reward += self.WIN_REWARD if won else self.LOSS_REWARD
+            reward += self.reward_cfg.win if won else self.reward_cfg.loss
 
         obs  = self._get_obs_for_next_trained_creature()
         info = {"round": self.cm.initiative.round}
@@ -528,9 +578,9 @@ class CombatEnv:
             prev  = self._prev_enemy_hp.get(id(c), c.hp)
             delta = prev - c.hp
             if delta > 0:
-                reward += delta * self.DAMAGE_SCALE
+                reward += delta * self.reward_cfg.damage_scale
                 if not c.is_alive():
-                    reward += self.KILL_REWARD
+                    reward += self.reward_cfg.kill
             self._prev_enemy_hp[id(c)] = c.hp
         return reward
 
@@ -545,7 +595,9 @@ class CombatEnv:
                     if x.team == self.trained_team and x is not c and x.is_alive()
                 ]
                 if memory:
-                    return memory.get_state_vector(c, enemies, allies)
+                    max_rounds = self.scenario_data.get("max_rounds", 30)
+                    return memory.get_state_vector(c, enemies, allies,
+                                                   max_rounds=max_rounds)
                 break
         return [0.0] * 9
 

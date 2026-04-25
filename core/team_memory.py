@@ -371,88 +371,118 @@ class TeamMemory:
             return len(status.targeted_by) if status else 0
         return max(allies, key=pressure)
 
-    def get_state_vector(self, creature, enemies: list, allies: list) -> list[float]:
+    _MELEE_RANGE = 1.5   # squares -- covers orthogonal (1.0) and diagonal (1.41)
+    _DIST_CAP    = 10.0  # squares beyond which distance saturates to 1.0
+
+    def get_state_vector(
+        self,
+        creature,
+        enemies: list,
+        allies: list,
+        max_rounds: int = 30,
+    ) -> list[float]:
         """
         Build a normalised state vector for ML input.
 
-        9 features (all normalised to roughly 0-1):
-          0: own HP ratio
-          1: recommended target HP ratio
-          2: number of living allies / 5
-          3: number of living enemies / 5
-          4: is any ally under pressure (0 or 1)
-          5: nearest enemy distance / 30  (coarse range bucket)
-          6: most-threatened ally HP ratio (0 if none under pressure)
-          7: estimated P(enemy hits us) based on observed attack rolls
-          8: recommended target threat score / 10 (how dangerous they are)
+        12 features (all in [0, 1]):
 
-        State space: 3^9 = 19,683 with n_bins=3.
+        Core 9 -- used by RL Q-table (n_features=9) and Evo
+          0  own HP ratio
+          1  team HP ratio  (sum alive HP / sum alive max_hp, incl. self)
+          2  enemy HP ratio (sum alive enemy HP / sum alive enemy max_hp)
+          3  team size advantage  (n_alive_friendly / total_alive)
+          4  nearest enemy distance, normalised to _DIST_CAP squares
+          5  in melee range of any enemy  (0 or 1)
+          6  round fraction  (current_round / max_rounds)
+          7  any ally under pressure  (0 or 1)
+          8  top enemy threat score, normalised (cap at 10)
+
+        Extended 3 -- used by Evo (n_features=12)
+          9  enemies in melee range / 5   (how surrounded)
+          10 focus-target HP ratio        (0 if no focus target)
+          11 most-pressured ally HP ratio (0 if no ally under pressure)
+
+        Note: features 0-8 replace the previous 9-feature layout.
+        Existing .npy weights trained on the old vector must be retrained.
+        State space with n_bins=3: 3^9 = 19683 (RL) / 3^12 = 531441 (evo).
         """
-        import statistics
+        n_friendly = 1 + len(allies)
+        n_enemy    = len(enemies)
+        n_total    = n_friendly + n_enemy
 
-        target    = self.recommended_target(enemies)
-        hp_ratio  = creature.hp / max(creature.max_hp, 1)
-        target_hp = target.hp / max(target.max_hp, 1) if target else 0.0
+        # 0: own HP ratio
+        own_hp_ratio = creature.hp / max(creature.max_hp, 1)
 
-        # feature 5 â nearest enemy distance, coarse bucket
-        nearest_dist = 0.0
-        if enemies:
+        # 1: team HP ratio
+        all_friendly  = [creature] + allies
+        team_hp_ratio = (
+            sum(c.hp for c in all_friendly) /
+            max(sum(c.max_hp for c in all_friendly), 1)
+        )
+
+        # 2: enemy HP ratio
+        enemy_hp_ratio = (
+            sum(e.hp for e in enemies) /
+            max(sum(e.max_hp for e in enemies), 1)
+        ) if enemies else 0.0
+
+        # 3: team size advantage
+        size_adv = n_friendly / max(n_total, 1)
+
+        # 4-5: distance and melee exposure
+        nearest_raw = self._DIST_CAP
+        n_melee     = 0
+        for e in enemies:
             try:
-                nearest_dist = min(
-                    self.battle_map.distance_between(creature, e)
-                    for e in enemies
-                ) / 30.0
+                d = self.battle_map.distance_between(creature, e)
+                if d < nearest_raw:
+                    nearest_raw = d
+                if d <= self._MELEE_RANGE:
+                    n_melee += 1
             except LookupError:
                 pass
-        nearest_dist = min(nearest_dist, 1.0)
+        nearest_dist = min(nearest_raw / self._DIST_CAP, 1.0)
+        in_melee     = 1.0 if nearest_raw <= self._MELEE_RANGE else 0.0
 
-        # feature 6 â HP of most-threatened ally (0 if none under pressure)
-        threatened_ally_hp = 0.0
+        # 6: round fraction
+        round_frac = min(self.round / max(max_rounds, 1), 1.0)
+
+        # 7: ally pressure
+        ally_pressure = 1.0 if any(self.ally_under_pressure(a) for a in allies) else 0.0
+
+        # 8: top enemy threat score
+        threat_scores = [
+            self._threats[id(e)].threat_score
+            for e in enemies if id(e) in self._threats
+        ]
+        top_threat = min(max(threat_scores) / 10.0, 1.0) if threat_scores else 0.0
+
+        # 9: melee crowding (evo)
+        melee_crowd = min(n_melee / 5.0, 1.0)
+
+        # 10: focus-target HP ratio (evo)
+        target    = self.recommended_target(enemies)
+        target_hp = target.hp / max(target.max_hp, 1) if target else 0.0
+
+        # 11: most-pressured ally HP ratio (evo)
         pressured = [a for a in allies if self.ally_under_pressure(a)]
-        if pressured:
-            threatened_ally_hp = min(
-                a.hp / max(a.max_hp, 1) for a in pressured
-            )
-
-        # feature 7 â estimated P(most-dangerous enemy hits creature's AC)
-        # Uses observed attack-roll totals recorded in ThreatProfile.
-        # Falls back to 0.5 (neutral prior) until enough data exists.
-        hit_prob = 0.5
-        if enemies:
-            # Pick the highest-threat enemy we have data on
-            scored = [
-                (e, self._threats[id(e)])
-                for e in enemies
-                if id(e) in self._threats
-                and len(self._threats[id(e)].attack_bonuses_seen) >= 2
-            ]
-            if scored:
-                _, profile = max(scored, key=lambda x: x[1].threat_score)
-                median_total    = statistics.median(profile.attack_bonuses_seen)
-                inferred_bonus  = median_total - 10.5
-                needed          = creature.ac - inferred_bonus
-                hit_prob        = (21 - max(1, min(20, int(needed)))) / 20.0
-                hit_prob        = max(0.05, min(0.95, hit_prob))
-
-        # feature 8 â recommended target threat score, normalised
-        threat_score_norm = 0.0
-        if target:
-            threat_score_norm = min(self.threat_level(target) / 10.0, 1.0)
-
-        ally_pressure = 1.0 if any(
-            self.ally_under_pressure(a) for a in allies
-        ) else 0.0
+        threatened_ally_hp = (
+            min(a.hp / max(a.max_hp, 1) for a in pressured) if pressured else 0.0
+        )
 
         return [
-            hp_ratio,            # 0
-            target_hp,           # 1
-            len(allies) / 5,     # 2
-            len(enemies) / 5,    # 3
-            ally_pressure,       # 4
-            nearest_dist,        # 5
-            threatened_ally_hp,  # 6
-            hit_prob,            # 7
-            threat_score_norm,   # 8
+            own_hp_ratio,       # 0  own survivability
+            team_hp_ratio,      # 1  whole-team health
+            enemy_hp_ratio,     # 2  enemy health remaining (fight progress)
+            size_adv,           # 3  relative team size
+            nearest_dist,       # 4  range to nearest enemy
+            in_melee,           # 5  immediate melee threat
+            round_frac,         # 6  time pressure / timeout awareness
+            ally_pressure,      # 7  teammate being focused?
+            top_threat,         # 8  danger level of scariest enemy
+            melee_crowd,        # 9  how surrounded (evo)
+            target_hp,          # 10 focus-target health (evo)
+            threatened_ally_hp, # 11 most-pressured ally health (evo)
         ]
 
     def summary(self) -> str:

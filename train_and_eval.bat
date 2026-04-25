@@ -11,7 +11,7 @@ setlocal EnableDelayedExpansion
 
 :: ── CONFIG ──────────────────────────────────────────────────
 set RUN_NAME=overnight_run
-set TRAIN_SCENARIO=brendiir_vs_goblins.json
+set TRAIN_SCENARIOS=brendiir_vs_goblins.json brendiir_vs_orcs.json
 set EVAL_SCENARIOS=brendiir_vs_goblins.json brendiir_vs_orcs.json
 set PYTHON=python
 set WORKERS=4
@@ -56,7 +56,7 @@ call :log ""
 call :log "  [1/4] RL training  (%RL_EPISODES% episodes)"
 
 %PYTHON% main.py train ^
-    --json        %TRAIN_SCENARIO% ^
+    --json        %TRAIN_SCENARIOS% ^
     --method      rl ^
     --team        red ^
     --run-name    %RUN_NAME% ^
@@ -86,7 +86,7 @@ call :log ""
 call :log "  [2/4] Evo training  (%EVO_GENERATIONS% generations)"
 
 %PYTHON% main.py train ^
-    --json             %TRAIN_SCENARIO% ^
+    --json             %TRAIN_SCENARIOS% ^
     --method           evo ^
     --team             red ^
     --run-name         %RUN_NAME% ^

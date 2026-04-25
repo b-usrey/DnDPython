@@ -2,7 +2,7 @@
 setlocal EnableDelayedExpansion
 
 :: ============================================================
-:: quick_run.bat  --  faster test run (~10-15 min with 4 workers)
+:: train_and_eval.bat  --  full overnight run
 ::
 :: Output:
 ::   saves\<RUN_NAME>\rl\   Q-table weights, logs, eval results
@@ -11,28 +11,28 @@ setlocal EnableDelayedExpansion
 
 :: ── CONFIG ──────────────────────────────────────────────────
 set RUN_NAME=quick_run
-set TRAIN_SCENARIO=brendiir_vs_goblins.json
+set TRAIN_SCENARIOS=brendiir_vs_goblins.json brendiir_vs_orcs.json
 set EVAL_SCENARIOS=brendiir_vs_goblins.json brendiir_vs_orcs.json
 set PYTHON=python
 set WORKERS=4
 
-set RL_EPISODES=2000
+set RL_EPISODES=1000
 set RL_BINS=3
-set RL_ALPHA=0.20
+set RL_ALPHA=0.15
 set RL_GAMMA=0.95
 set RL_EPS=1.0
 set RL_EPS_MIN=0.05
-set RL_EPS_DECAY=0.990
-set RL_PRINT_EVERY=200
+set RL_EPS_DECAY=0.999
+set RL_PRINT_EVERY=500
 
-set EVO_GENERATIONS=10
-set EVO_POP_SIZE=20
-set EVO_COMBATS_PER_IND=10
+set EVO_GENERATIONS=20
+set EVO_POP_SIZE=15
+set EVO_COMBATS_PER_IND=20
 set EVO_ELITE_FRAC=0.2
 set EVO_MUTATION_SCALE=0.1
 set EVO_CROSSOVER_RATE=0.5
 
-set EVAL_EPISODES=200
+set EVAL_EPISODES=1000
 :: ── END CONFIG ──────────────────────────────────────────────
 
 set BASE_DIR=saves\%RUN_NAME%
@@ -46,7 +46,7 @@ if not exist "%RL_DIR%"  mkdir "%RL_DIR%"
 if not exist "%EVO_DIR%" mkdir "%EVO_DIR%"
 
 call :log "========================================================"
-call :log "  quick_run.bat  --  %RUN_NAME%"
+call :log "  train_and_eval.bat  --  %RUN_NAME%"
 call :log "  Started: %DATE% %TIME%"
 call :log "========================================================"
 call :log ""
@@ -56,7 +56,7 @@ call :log ""
 call :log "  [1/4] RL training  (%RL_EPISODES% episodes)"
 
 %PYTHON% main.py train ^
-    --json        %TRAIN_SCENARIO% ^
+    --json        %TRAIN_SCENARIOS% ^
     --method      rl ^
     --team        red ^
     --run-name    %RUN_NAME% ^
@@ -71,7 +71,7 @@ call :log "  [1/4] RL training  (%RL_EPISODES% episodes)"
     --print-every %RL_PRINT_EVERY% ^
     --workers     %WORKERS% ^
     --plot ^
-    --smoothing   100
+    --smoothing   500
 
 if errorlevel 1 (
     call :log "  ERROR: RL training failed -- aborting."
@@ -86,7 +86,7 @@ call :log ""
 call :log "  [2/4] Evo training  (%EVO_GENERATIONS% generations)"
 
 %PYTHON% main.py train ^
-    --json             %TRAIN_SCENARIO% ^
+    --json             %TRAIN_SCENARIOS% ^
     --method           evo ^
     --team             red ^
     --run-name         %RUN_NAME% ^

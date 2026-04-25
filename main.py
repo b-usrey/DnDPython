@@ -206,14 +206,17 @@ def run_training(args):
         StrategyTrainer, TrainingLog,
     )
 
-    scenario_data = load_json(args.json)
+    # Load one or more training scenarios.  Multiple --json files are mixed
+    # each episode so the policy generalises across encounters.
+    scenario_list = [load_json(j) for j in args.json]
     os.makedirs(args.save_dir, exist_ok=True)
 
-    run_name = args.run_name or os.path.splitext(args.json)[0]
-    log      = TrainingLog(name=run_name, trained_team=args.team)
+    base_name = os.path.splitext(args.json[0])[0] if len(args.json) == 1 else "multi"
+    run_name  = args.run_name or base_name
+    log       = TrainingLog(name=run_name, trained_team=args.team)
 
     env = CombatEnv(
-        scenario_data=scenario_data,
+        scenario_data=scenario_list,   # list → random pick per episode
         trained_team=args.team,
         silent=not args.verbose,
     )
@@ -542,8 +545,9 @@ if __name__ == "__main__":
 
     # ── train: ML training loop ──────────────────────────────────────────
     train_p = sub.add_parser("train", help="Train a strategy selector")
-    train_p.add_argument("--json",      required=True,
-                         help="Scenario JSON filename (in scenarios/)")
+    train_p.add_argument("--json",      required=True, nargs="+",
+                         help="Scenario JSON filename(s) in scenarios/. "
+                              "Pass multiple to train across all scenarios.")
     train_p.add_argument("--method",    choices=["rl", "evo"], default="rl",
                          help="Training method: rl (Q-table) or evo (evolutionary)")
     train_p.add_argument("--team",      default="red",
