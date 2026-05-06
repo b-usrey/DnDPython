@@ -13,6 +13,7 @@ class Attack(ABC):
         self.damage_mod = 0
         self.range      = range
         self.tags       = set()
+        self.item       = item if (item and item.item_type == "weapon") else None
         if item and item.item_type == "weapon":
             self.base_dice  = (int(item.damage_die.split("d")[0]), int(item.damage_die.split("d")[1]))
             self.to_hit_mod = attacker.statblock.mods[item.ability] + item.attack_bonus + attacker.proficiency

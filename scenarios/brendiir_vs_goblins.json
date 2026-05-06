@@ -26,9 +26,9 @@
       "classes":[["Fighter",5]],
       "subclasses":{"Fighter":"Champion"},
       "stats":{"Str": 14,"Dex":19,"Con":14,"Int":8,"Wis":12,"Cha":10},
-      "choices":[["Fighter",2,"Fighting Style","Two-Weapon Fighting"]],
-      "items": ["Greatsword","Chain Mail"],
-      "equipped": ["Greatsword","Chain Mail"],
+      "choices":[["Fighter",1,"Fighting Style","Two-Weapon Fighting"]],
+      "items": ["Longsword","Shortsword","Chain Mail"],
+      "equipped": ["Longsword","Shortsword","Chain Mail"],
       "features":["Mobile","Dual Wielder","Resilient"]
     }
   ],

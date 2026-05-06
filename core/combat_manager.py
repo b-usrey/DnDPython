@@ -106,9 +106,9 @@ class CombatManager:
     def _run_round(self) -> None:
         """Execute one full round — every creature in initiative order gets a turn."""
         active = [c for _, c in self.initiative.initiative_order if c.is_alive()]
-        print(f"\n{'─'*52}")
+        print(f"\n{'-'*52}")
         print(f"  Round {self.initiative.round}")
-        print(f"{'─'*52}")
+        print(f"{'-'*52}")
 
         for _, creature in list(self.initiative.initiative_order):
             if not creature.is_alive():
@@ -319,8 +319,14 @@ class CombatManager:
             end_pos = self.battle_map.get_position(creature)
             ft_used = effective_speed - remaining
             print(f"  {creature.name} moves "
-                  f"({first_pos[0]},{first_pos[1]}) → "
+                  f"({first_pos[0]},{first_pos[1]}) -> "
                   f"({end_pos[0]},{end_pos[1]})  [{ft_used}ft]")
+            self.event.broadcast("move", {
+                "creature": creature,
+                "from":     first_pos,
+                "to":       end_pos,
+                "ft":       ft_used,
+            })
 
         # Dodge — spend action to impose disadvantage on incoming attacks
         # until the start of this creature's next turn.
@@ -329,8 +335,10 @@ class CombatManager:
             print(f"  {creature.name} takes the Dodge action.")
 
         # Attack — fire main attack, extra attacks, then Action Surge if available
+        attacked = False
         if decision.target and decision.weapon and creature.actions.use_action():
             self._do_attack_action(creature, decision.target, decision.weapon)
+            attacked = True
 
             while creature.actions.can_surge:
                 enemies = self.battle_map.enemies_of(creature)
@@ -353,6 +361,8 @@ class CombatManager:
                 self._do_attack_action(creature, surge_target, decision.weapon)
         elif not decision.target:
             print(f"  {creature.name} found no target.")
+
+        self._run_bonus_actions(creature, attacked)
 
     # ------------------------------------------------------------------
     # Shared action helpers
@@ -419,6 +429,90 @@ class CombatManager:
                 print(f"  Target down — switching to {target.name}")
             self._execute_attack(creature, target, weapon)
 
+    def _run_bonus_actions(self, creature, attacked: bool) -> None:
+        """
+        Fire bonus-action abilities after the main action phase.
+
+        Priority order:
+          1. Two-Weapon Fighting off-hand attack (requires Attack action was taken)
+          2. Feature-provided bonus actions (Nature's Veil, etc.)
+        """
+        if not creature.actions.bonus_actions:
+            return
+
+        # Two-Weapon Fighting — off-hand melee attack as a bonus action
+        if attacked and getattr(creature, "twf_style", False):
+            self._try_twf_attack(creature)
+
+        # Feature bonus actions — currently: Nature's Veil (go invisible when hurt)
+        if creature.actions.bonus_actions:
+            for feat in creature.features:
+                if not creature.actions.bonus_actions:
+                    break
+                if hasattr(feat, "activate") and feat.name == "Nature's Veil":
+                    hp_frac = creature.hp / max(creature.max_hp, 1)
+                    if hp_frac < 0.5 and not creature.has_condition("invisible"):
+                        feat.activate()
+                        self.event.broadcast("bonus_action", {
+                            "creature": creature,
+                            "ability":  "Nature's Veil",
+                            "detail":   "became invisible",
+                        })
+
+    def _try_twf_attack(self, creature) -> None:
+        """
+        Execute the Two-Weapon Fighting bonus action off-hand attack.
+        Requires distinct weapons in hand1 and hand2.
+        Off-hand damage excludes the ability modifier unless twf_style is set.
+        """
+        hand1_name = creature.equipped_slots.get("hand1")
+        hand2_name = creature.equipped_slots.get("hand2")
+        if not hand1_name or not hand2_name or hand1_name == hand2_name:
+            return  # need two distinct equipped weapons
+
+        offhand = creature._get_equipped_by_name(hand2_name)
+        if not offhand or offhand.item_type != "weapon":
+            return
+
+        # Off-hand must be light unless the creature has Dual Wielder
+        is_light = "light" in getattr(offhand, "properties", [])
+        if not is_light and not getattr(creature, "dual_wielder", False):
+            return
+
+        enemies = self.battle_map.enemies_of(creature)
+        if not enemies:
+            return
+
+        # TWF is a melee bonus attack — only targets in reach qualify
+        reach = getattr(offhand, "normal_range", 5)
+        adjacent = [
+            e for e in enemies
+            if self.battle_map.is_in_melee_range(creature, e, reach=reach)
+        ]
+        if not adjacent:
+            return
+        target = min(adjacent, key=lambda e: e.hp)
+        rr = self.battle_map.check_attack_range(
+            creature, target,
+            is_ranged=getattr(offhand, "attack_type", "melee") == "range",
+            normal_range=reach,
+            long_range=reach,
+        )
+        if not rr.valid:
+            return
+
+        if not creature.actions.use_bonus_action():
+            return
+
+        print(f"  {creature.name} makes an off-hand attack with {offhand.name}! [TWF]")
+        atk = WeaponAttack(creature, target, "1d6", item=offhand)
+        atk.tags.add("bonus_action")
+        # Without TWF style, no ability modifier on off-hand damage
+        if not getattr(creature, "twf_style", False):
+            ability = getattr(offhand, "ability", "Str")
+            atk.damage_mod -= creature.statblock.mods.get(ability, 0)
+        atk.declare_attack()
+
     def _execute_attack(self, attacker, target, weapon=None) -> None:
         """
         Resolve an attack. weapon can be an Item, WeaponProfile, or None.
@@ -459,6 +553,9 @@ class CombatManager:
                 print(f"  {attacker.name} attacks with disadvantage: {range_result.reason}")
 
         atk = WeaponAttack(attacker, target, "1d6", item=item_obj)
+        # For monster attacks (no Item), preserve the weapon name for the logger
+        if item_obj is None and weapon is not None:
+            atk._weapon_name_hint = getattr(weapon, "name", None)
 
         # Apply disadvantage from range check
         if self.battle_map.get_position(attacker) and self.battle_map.get_position(target):
@@ -504,6 +601,7 @@ class CombatManager:
     def _resolve_outcome(self) -> str:
         all_creatures = [c for _, c in self.initiative.initiative_order]
         survivors = [c for c in all_creatures if c.is_alive()]
+        self.event.broadcast("CombatEnded", {"survivors": survivors})
         if not survivors:
             result = "Draw — all creatures are down."
         else:

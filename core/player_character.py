@@ -128,7 +128,7 @@ class PlayerCharacter(Creature):
 
         self.compute_ac()
         if best_armour:
-            print(f"  {self.name}: {best_armour.name} → AC {self.ac}")
+            print(f"  {self.name}: {best_armour.name} -> AC {self.ac}")
 
     def get_attack(self,target=None):
         targetAC = 10

@@ -10,9 +10,9 @@ setlocal EnableDelayedExpansion
 :: ============================================================
 
 :: ── CONFIG ──────────────────────────────────────────────────
-set RUN_NAME=overnight_run
+set RUN_NAME=overnight_run_20260425
 set TRAIN_SCENARIOS=brendiir_vs_goblins.json brendiir_vs_orcs.json
-set EVAL_SCENARIOS=brendiir_vs_goblins.json brendiir_vs_orcs.json
+set EVAL_SCENARIOS=brendiir_vs_goblins.json brendiir_vs_orcs.json brendiir_vs_hobgoblins.json
 set PYTHON=python
 set WORKERS=4
 
@@ -32,18 +32,34 @@ set EVO_ELITE_FRAC=0.2
 set EVO_MUTATION_SCALE=0.1
 set EVO_CROSSOVER_RATE=0.5
 
+:: DQN — slow epsilon decay keeps exploration active through ~75%% of training
+set DQN_EPISODES=20000
+set DQN_HIDDEN=128 64
+set DQN_LR=0.0005
+set DQN_GAMMA=0.95
+set DQN_EPS=1.0
+set DQN_EPS_MIN=0.05
+set DQN_EPS_DECAY=0.99985
+set DQN_BUF=50000
+set DQN_BATCH=128
+set DQN_TARGET_FREQ=200
+set DQN_PRINT_EVERY=500
+
 set EVAL_EPISODES=1000
 :: ── END CONFIG ──────────────────────────────────────────────
 
 set BASE_DIR=saves\%RUN_NAME%
 set RL_DIR=%BASE_DIR%\rl
 set EVO_DIR=%BASE_DIR%\evo
+set DQN_DIR=%BASE_DIR%\dqn
 set RL_WEIGHTS=%RL_DIR%\%RUN_NAME%_rl.npy
 set EVO_WEIGHTS=%EVO_DIR%\%RUN_NAME%_evo.npy
+set DQN_WEIGHTS=%DQN_DIR%\%RUN_NAME%_dqn.pt
 set LOG_FILE=%BASE_DIR%\run_log.txt
 
 if not exist "%RL_DIR%"  mkdir "%RL_DIR%"
 if not exist "%EVO_DIR%" mkdir "%EVO_DIR%"
+if not exist "%DQN_DIR%" mkdir "%DQN_DIR%"
 
 call :log "========================================================"
 call :log "  train_and_eval.bat  --  %RUN_NAME%"
@@ -53,7 +69,7 @@ call :log ""
 
 
 :: ── 1. RL TRAINING ───────────────────────────────────────────
-call :log "  [1/4] RL training  (%RL_EPISODES% episodes)"
+call :log "  [1/6] RL training  (%RL_EPISODES% episodes)"
 
 %PYTHON% main.py train ^
     --json        %TRAIN_SCENARIOS% ^
@@ -83,7 +99,7 @@ call :log ""
 
 
 :: ── 2. EVO TRAINING ──────────────────────────────────────────
-call :log "  [2/4] Evo training  (%EVO_GENERATIONS% generations)"
+call :log "  [2/6] Evo training  (%EVO_GENERATIONS% generations)"
 
 %PYTHON% main.py train ^
     --json             %TRAIN_SCENARIOS% ^
@@ -110,7 +126,7 @@ call :log ""
 
 
 :: ── 3. RL EVAL ───────────────────────────────────────────────
-call :log "  [3/4] RL eval  (%EVAL_EPISODES% episodes per scenario)"
+call :log "  [3/6] RL eval  (%EVAL_EPISODES% episodes per scenario)"
 
 for %%S in (%EVAL_SCENARIOS%) do (
     set RL_SNAME=%%~nS
@@ -135,7 +151,7 @@ call :log ""
 
 
 :: ── 4. EVO EVAL ──────────────────────────────────────────────
-call :log "  [4/4] Evo eval  (%EVAL_EPISODES% episodes per scenario)"
+call :log "  [4/6] Evo eval  (%EVAL_EPISODES% episodes per scenario)"
 
 for %%S in (%EVAL_SCENARIOS%) do (
     set EVO_SNAME=%%~nS
@@ -153,6 +169,63 @@ for %%S in (%EVAL_SCENARIOS%) do (
         call :log "    WARNING: Evo eval failed for %%S"
     ) else (
         call :log "    Saved: %EVO_DIR%\eval_!EVO_SNAME!.json"
+    )
+    (call )
+)
+call :log ""
+
+
+:: ── 5. DQN TRAINING ──────────────────────────────────────────
+call :log "  [5/6] DQN training  (%DQN_EPISODES% episodes)"
+
+%PYTHON% main.py train ^
+    --json             %TRAIN_SCENARIOS% ^
+    --method           dqn ^
+    --team             red ^
+    --run-name         %RUN_NAME% ^
+    --save-dir         %DQN_DIR% ^
+    --episodes         %DQN_EPISODES% ^
+    --dqn-hidden       %DQN_HIDDEN% ^
+    --dqn-lr           %DQN_LR% ^
+    --gamma            %DQN_GAMMA% ^
+    --eps              %DQN_EPS% ^
+    --eps-min          %DQN_EPS_MIN% ^
+    --eps-decay        %DQN_EPS_DECAY% ^
+    --dqn-buf          %DQN_BUF% ^
+    --dqn-batch        %DQN_BATCH% ^
+    --dqn-target-freq  %DQN_TARGET_FREQ% ^
+    --print-every      %DQN_PRINT_EVERY% ^
+    --plot ^
+    --smoothing        500
+
+if errorlevel 1 (
+    call :log "  ERROR: DQN training failed -- aborting."
+    goto :end
+)
+call :log "  DQN training done."
+call :log ""
+(call )
+
+
+:: ── 6. DQN EVAL ──────────────────────────────────────────────
+call :log "  [6/6] DQN eval  (%EVAL_EPISODES% episodes per scenario)"
+
+for %%S in (%EVAL_SCENARIOS%) do (
+    set DQN_SNAME=%%~nS
+    call :log "    %%S"
+    %PYTHON% main.py eval ^
+        --json    %%S ^
+        --load    %DQN_WEIGHTS% ^
+        --method  dqn ^
+        --team    red ^
+        --n       %EVAL_EPISODES% ^
+        --workers %WORKERS% ^
+        --output  %DQN_DIR%\eval_!DQN_SNAME!.json ^
+        --plot    %DQN_DIR%\eval_!DQN_SNAME!.png
+    if errorlevel 1 (
+        call :log "    WARNING: DQN eval failed for %%S"
+    ) else (
+        call :log "    Saved: %DQN_DIR%\eval_!DQN_SNAME!.json"
     )
     (call )
 )
