@@ -78,33 +78,29 @@ class CreatureSummary(BaseModel):
 
 
 class SimulateResponse(BaseModel):
-    outcome: str
-    winner: str | None
-    rounds: int
-    timed_out: bool
-    creatures: list[CreatureSummary]
-    log: str
+    episodes_run: int
+    wins: dict[str, int]       # e.g. {"blue": 7, "red": 2, "none": 1}
+    win_rate: float            # blue team win rate
+    avg_rounds: float
+    sample_outcome: str        # last episode's outcome string
+    creatures: list[CreatureSummary]  # last episode's final state
+    log: str                   # last episode's combat log
 
 # ── Helper ────────────────────────────────────────────────────────────────────
 
-def _run_simulation(scenario_data: dict, silent: bool = True) -> SimulateResponse:
-    """
-    Core simulation runner — extracted from main.py so the API can call it
-    without touching argparse or the file system beyond loading the scenario.
-    """
-    
+import random as _random
+
+def _run_episode(scenario_data: dict, silent: bool = True) -> dict:
+    """Run a single combat episode. Returns a plain dict with episode results."""
     captured = io.StringIO()
     ctx = contextlib.redirect_stdout(captured) if silent else contextlib.nullcontext()
 
     with ctx:
         event   = EventBus()
-        
         factory = CreatureFactory()
         loader  = ScenarioLoader(factory, event)
         players, monsters = loader.load(scenario_data)
 
-        # Attach monster attack templates (mirrors main.py logic)
-        import random as _random
         monster_idx = 0
         for tmpl in scenario_data.get("monsters", []):
             mtype = tmpl.get("type", "").upper()
@@ -131,18 +127,16 @@ def _run_simulation(scenario_data: dict, silent: bool = True) -> SimulateRespons
                         [melee_attacks, ranged_attacks]
                     ) or all_attacks
                 monster_idx += 1
+
         battle_map = build_map(scenario_data)
         place_creatures(scenario_data, players, monsters, battle_map)
-
         initiative = InitiativeManager(players + monsters, event)
-
         max_rounds = scenario_data.get("max_rounds", 100)
         cm = CombatManager(event, initiative, battle_map, max_rounds=max_rounds)
         outcome = cm.run()
 
     log = captured.getvalue()
 
-    # ── Determine winner from outcome string ──────────────────────────────
     outcome_lower = outcome.lower()
     if "blue" in outcome_lower:
         winner = "blue"
@@ -151,7 +145,6 @@ def _run_simulation(scenario_data: dict, silent: bool = True) -> SimulateRespons
     else:
         winner = None
 
-    # ── Snapshot every creature's final state ─────────────────────────────
     all_creatures = players + monsters
     summaries = [
         CreatureSummary(
@@ -164,14 +157,13 @@ def _run_simulation(scenario_data: dict, silent: bool = True) -> SimulateRespons
         for c in all_creatures
     ]
 
-    return SimulateResponse(
-        outcome=outcome,
-        winner=winner,
-        rounds=cm.initiative.round,
-        timed_out=cm.timed_out,
-        creatures=summaries,
-        log=log,
-    )
+    return {
+        "outcome": outcome,
+        "winner": winner,
+        "rounds": cm.initiative.round,
+        "creatures": summaries,
+        "log": log,
+    }
 
 
 # ── Routes ────────────────────────────────────────────────────────────────────
@@ -225,10 +217,28 @@ def simulate(req: SimulateRequest):
             detail="Provide either 'scenario_name' or 'scenario' in the request body."
         )
 
+    n = min(req.episodes, req.max_episodes)
+    wins: dict[str, int] = {"blue": 0, "red": 0, "none": 0}
+    total_rounds = 0
+    last: dict = {}
+
     try:
-        return _run_simulation(scenario_data, silent=req.silent)
+        for _ in range(n):
+            last = _run_episode(scenario_data, silent=req.silent)
+            wins[last["winner"] or "none"] += 1
+            total_rounds += last["rounds"]
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
+
+    return SimulateResponse(
+        episodes_run=n,
+        wins=wins,
+        win_rate=wins["blue"] / n if n else 0.0,
+        avg_rounds=total_rounds / n if n else 0.0,
+        sample_outcome=last.get("outcome", ""),
+        creatures=last.get("creatures", []),
+        log=last.get("log", ""),
+    )
 
 
 @app.get("/monsters", summary="List known monster types")
