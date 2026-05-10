@@ -1,0 +1,700 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>DnDPython — D&D 5e Combat Simulator</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet" />
+
+  <style>
+    /* ── Tokens ─────────────────────────────────────────────────────── */
+    :root {
+      --ink:        #0d0b0e;
+      --parchment:  #f2e8d5;
+      --gold:       #c9a84c;
+      --gold-dim:   #7a5f28;
+      --crimson:    #8b1a1a;
+      --steel:      #3a4a5c;
+      --steel-mid:  #1e2a38;
+      --steel-dark: #111820;
+      --glow:       rgba(201,168,76,0.18);
+      --glow-hot:   rgba(201,168,76,0.45);
+    }
+
+    /* ── Reset ──────────────────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background-color: var(--steel-dark);
+      color: var(--parchment);
+      font-family: 'Crimson Pro', Georgia, serif;
+      font-size: 18px;
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    /* ── Background noise texture ───────────────────────────────────── */
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      background-size: 200px 200px;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.5;
+    }
+
+    /* ── Utility ────────────────────────────────────────────────────── */
+    .container {
+      max-width: 900px;
+      margin: 0 auto;
+      padding: 0 2rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .gold       { color: var(--gold); }
+    .divider {
+      width: 120px;
+      height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      margin: 0 auto;
+    }
+
+    /* ── Header ─────────────────────────────────────────────────────── */
+    header {
+      position: relative;
+      text-align: center;
+      padding: 5rem 2rem 3rem;
+      overflow: hidden;
+    }
+
+    /* radial glow behind title */
+    header::after {
+      content: '';
+      position: absolute;
+      top: 20%;
+      left: 50%;
+      transform: translateX(-50%);
+      width: 600px;
+      height: 300px;
+      background: radial-gradient(ellipse, var(--glow-hot) 0%, transparent 70%);
+      pointer-events: none;
+    }
+
+    .crest {
+      font-size: 3rem;
+      margin-bottom: 1rem;
+      animation: floatCrest 4s ease-in-out infinite;
+      position: relative;
+      z-index: 1;
+    }
+
+    @keyframes floatCrest {
+      0%, 100% { transform: translateY(0); }
+      50%       { transform: translateY(-8px); }
+    }
+
+    h1 {
+      font-family: 'Cinzel Decorative', serif;
+      font-size: clamp(2rem, 6vw, 3.6rem);
+      color: var(--gold);
+      letter-spacing: 0.04em;
+      line-height: 1.15;
+      text-shadow: 0 0 40px var(--glow-hot), 0 2px 8px rgba(0,0,0,0.8);
+      position: relative;
+      z-index: 1;
+    }
+
+    .subtitle {
+      font-family: 'Cinzel', serif;
+      font-size: 0.95rem;
+      letter-spacing: 0.25em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      margin-top: 0.75rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    /* ── Nav ────────────────────────────────────────────────────────── */
+    nav {
+      display: flex;
+      justify-content: center;
+      gap: 2.5rem;
+      padding: 1.25rem 0;
+      border-top: 1px solid rgba(201,168,76,0.2);
+      border-bottom: 1px solid rgba(201,168,76,0.2);
+      margin-bottom: 4rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    nav a {
+      font-family: 'Cinzel', serif;
+      font-size: 0.8rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    nav a:hover { color: var(--gold); }
+
+    /* ── Section shared ─────────────────────────────────────────────── */
+    section { padding: 4rem 0; }
+
+    h2 {
+      font-family: 'Cinzel', serif;
+      font-size: 1.5rem;
+      color: var(--gold);
+      letter-spacing: 0.1em;
+      text-align: center;
+      margin-bottom: 1rem;
+    }
+
+    /* ── Hero / demo GIF ────────────────────────────────────────────── */
+    #demo {
+      text-align: center;
+    }
+
+    .gif-frame {
+      display: inline-block;
+      position: relative;
+      margin: 2rem auto 1.5rem;
+    }
+
+    .gif-frame::before {
+      content: '';
+      position: absolute;
+      inset: -3px;
+      border: 2px solid var(--gold);
+      opacity: 0.5;
+      pointer-events: none;
+      z-index: 2;
+    }
+
+    /* corner ornaments */
+    .gif-frame::after {
+      content: '✦';
+      position: absolute;
+      top: -14px;
+      left: 50%;
+      transform: translateX(-50%);
+      color: var(--gold);
+      font-size: 1.2rem;
+      z-index: 3;
+    }
+
+    .gif-frame img {
+      display: block;
+      max-width: 100%;
+      width: 700px;
+      box-shadow: 0 8px 60px rgba(0,0,0,0.7), 0 0 40px var(--glow);
+    }
+
+    .hero-desc {
+      max-width: 620px;
+      margin: 0 auto;
+      font-size: 1.15rem;
+      color: rgba(242,232,213,0.85);
+      font-style: italic;
+      text-align: center;
+    }
+
+    /* ── Features grid ──────────────────────────────────────────────── */
+    #features { position: relative; }
+
+    #features::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 50%; transform: translateX(-50%);
+      width: 1px;
+      height: 100%;
+      background: linear-gradient(to bottom, transparent, rgba(201,168,76,0.15), transparent);
+    }
+
+    .features-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 1.5rem;
+      margin-top: 2.5rem;
+    }
+
+    .feature-card {
+      background: linear-gradient(135deg, rgba(30,42,56,0.8), rgba(17,24,32,0.9));
+      border: 1px solid rgba(201,168,76,0.15);
+      border-top: 2px solid var(--gold-dim);
+      padding: 1.75rem;
+      position: relative;
+      transition: border-color 0.3s, transform 0.3s, box-shadow 0.3s;
+    }
+
+    .feature-card:hover {
+      border-color: rgba(201,168,76,0.5);
+      border-top-color: var(--gold);
+      transform: translateY(-3px);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 20px var(--glow);
+    }
+
+    .feature-icon {
+      font-size: 2rem;
+      margin-bottom: 0.75rem;
+      display: block;
+    }
+
+    .feature-card h3 {
+      font-family: 'Cinzel', serif;
+      font-size: 0.95rem;
+      letter-spacing: 0.1em;
+      color: var(--gold);
+      margin-bottom: 0.5rem;
+    }
+
+    .feature-card p {
+      font-size: 0.95rem;
+      color: rgba(242,232,213,0.75);
+      line-height: 1.6;
+    }
+
+    /* ── How it works ───────────────────────────────────────────────── */
+    #how {
+      background: linear-gradient(180deg, transparent, rgba(30,42,56,0.3), transparent);
+    }
+
+    .steps {
+      display: flex;
+      flex-direction: column;
+      gap: 0;
+      margin-top: 2.5rem;
+      position: relative;
+    }
+
+    .steps::before {
+      content: '';
+      position: absolute;
+      left: 28px;
+      top: 24px;
+      bottom: 24px;
+      width: 1px;
+      background: linear-gradient(to bottom, var(--gold-dim), rgba(201,168,76,0.1));
+    }
+
+    .step {
+      display: flex;
+      gap: 1.75rem;
+      align-items: flex-start;
+      padding: 1.25rem 0;
+    }
+
+    .step-num {
+      flex-shrink: 0;
+      width: 56px;
+      height: 56px;
+      border: 1px solid var(--gold-dim);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-family: 'Cinzel Decorative', serif;
+      font-size: 1.1rem;
+      color: var(--gold);
+      background: var(--steel-dark);
+      position: relative;
+      z-index: 1;
+    }
+
+    .step-body h3 {
+      font-family: 'Cinzel', serif;
+      font-size: 0.95rem;
+      letter-spacing: 0.08em;
+      color: var(--gold);
+      margin-bottom: 0.3rem;
+    }
+
+    .step-body p {
+      font-size: 0.95rem;
+      color: rgba(242,232,213,0.75);
+    }
+
+    /* ── Roadmap / Coming soon ──────────────────────────────────────── */
+    #roadmap {
+      text-align: center;
+    }
+
+    .scroll-wrapper {
+      position: relative;
+      margin: 2.5rem auto 0;
+      max-width: 560px;
+      padding: 2.5rem 2.5rem 2rem;
+      background: linear-gradient(160deg, rgba(30,42,56,0.6), rgba(17,24,32,0.8));
+      border: 1px solid rgba(201,168,76,0.2);
+    }
+
+    /* scroll top/bottom ornament */
+    .scroll-wrapper::before,
+    .scroll-wrapper::after {
+      content: '';
+      display: block;
+      height: 8px;
+      background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+      margin-bottom: 1.5rem;
+    }
+    .scroll-wrapper::after { margin-bottom: 0; margin-top: 1.5rem; }
+
+    .roadmap-item {
+      display: flex;
+      align-items: baseline;
+      gap: 1rem;
+      text-align: left;
+      margin-bottom: 0.9rem;
+      font-size: 1rem;
+    }
+
+    .roadmap-item .rune {
+      font-size: 0.75rem;
+      color: var(--gold);
+      flex-shrink: 0;
+      opacity: 0.7;
+    }
+
+    .roadmap-item.done .rune { opacity: 1; color: #6dbf6d; }
+    .roadmap-item.done span { color: rgba(242,232,213,0.5); text-decoration: line-through; }
+    .roadmap-item span { color: rgba(242,232,213,0.85); }
+
+    .badge {
+      display: inline-block;
+      font-family: 'Cinzel', serif;
+      font-size: 0.65rem;
+      letter-spacing: 0.15em;
+      padding: 0.15em 0.6em;
+      border: 1px solid var(--gold-dim);
+      color: var(--gold-dim);
+      margin-left: 0.5rem;
+      vertical-align: middle;
+      text-transform: uppercase;
+    }
+
+    /* ── CTA ────────────────────────────────────────────────────────── */
+    #cta {
+      text-align: center;
+      padding: 5rem 0;
+    }
+
+    #cta p {
+      max-width: 520px;
+      margin: 1rem auto 2.5rem;
+      color: rgba(242,232,213,0.75);
+      font-style: italic;
+    }
+
+    .btn-group {
+      display: flex;
+      gap: 1rem;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+
+    .btn {
+      font-family: 'Cinzel', serif;
+      font-size: 0.8rem;
+      letter-spacing: 0.18em;
+      text-transform: uppercase;
+      text-decoration: none;
+      padding: 0.9rem 2.2rem;
+      transition: all 0.25s;
+      display: inline-block;
+    }
+
+    .btn-primary {
+      background: var(--gold);
+      color: var(--ink);
+      border: 2px solid var(--gold);
+    }
+    .btn-primary:hover {
+      background: transparent;
+      color: var(--gold);
+      box-shadow: 0 0 30px var(--glow-hot);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      color: var(--gold-dim);
+      border: 2px solid var(--gold-dim);
+    }
+    .btn-secondary:hover {
+      color: var(--gold);
+      border-color: var(--gold);
+    }
+
+    /* ── Footer ─────────────────────────────────────────────────────── */
+    footer {
+      border-top: 1px solid rgba(201,168,76,0.15);
+      padding: 2rem;
+      text-align: center;
+      font-family: 'Cinzel', serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      color: var(--gold-dim);
+      position: relative;
+      z-index: 1;
+    }
+
+    footer a {
+      color: var(--gold-dim);
+      text-decoration: none;
+    }
+    footer a:hover { color: var(--gold); }
+
+    /* ── Fade-in on scroll ──────────────────────────────────────────── */
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px);
+      transition: opacity 0.7s ease, transform 0.7s ease;
+    }
+    .reveal.visible {
+      opacity: 1;
+      transform: none;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Header ──────────────────────────────────────────────────────── -->
+  <header>
+    <div class="crest">⚔️</div>
+    <h1>DnDPython</h1>
+    <p class="subtitle">D&amp;D 5e Combat Simulator &amp; Tactical AI Engine</p>
+  </header>
+
+  <!-- ── Nav ─────────────────────────────────────────────────────────── -->
+  <nav>
+    <a href="#demo">Demo</a>
+    <a href="#features">Features</a>
+    <a href="#how">How It Works</a>
+    <a href="#roadmap">Roadmap</a>
+    <a href="#cta">Get Involved</a>
+  </nav>
+
+  <!-- ── Demo ────────────────────────────────────────────────────────── -->
+  <section id="demo">
+    <div class="container">
+      <h2>See It In Action</h2>
+      <div class="divider" style="margin-bottom: 0.5rem;"></div>
+
+      <div class="gif-frame">
+        <img
+          src="https://raw.githubusercontent.com/b-usrey/DnDPython/main/combat.gif"
+          alt="DnDPython combat simulation in action"
+        />
+      </div>
+
+      <p class="hero-desc">
+        A fully simulated D&amp;D 5e encounter — complete with initiative, movement,
+        attacks, saving throws, and class features — running entirely in Python.
+      </p>
+    </div>
+  </section>
+
+  <!-- ── Features ────────────────────────────────────────────────────── -->
+  <section id="features">
+    <div class="container">
+      <div class="divider" style="margin-bottom: 2rem;"></div>
+      <h2>What's Inside</h2>
+
+      <div class="features-grid reveal">
+
+        <div class="feature-card">
+          <span class="feature-icon">🗺️</span>
+          <h3>Battle Map Engine</h3>
+          <p>Grid-based maps with walls, difficult terrain, line-of-sight, and
+             range calculations — faithful to the 5e ruleset.</p>
+        </div>
+
+        <div class="feature-card">
+          <span class="feature-icon">🧠</span>
+          <h3>Tactical AI</h3>
+          <p>Creatures don't just swing randomly. The AI evaluates positioning,
+             target priority, and action economy each turn.</p>
+        </div>
+
+        <div class="feature-card">
+          <span class="feature-icon">🤖</span>
+          <h3>Machine Learning Strategies</h3>
+          <p>Reinforcement learning and evolutionary algorithms that train
+             combat strategies over thousands of simulated encounters.</p>
+        </div>
+
+        <div class="feature-card">
+          <span class="feature-icon">⚔️</span>
+          <h3>Classes &amp; Subclasses</h3>
+          <p>Fighter (Champion), Ranger (Gloomstalker) with authentic class
+             features, fighting styles, spells, and feat support.</p>
+        </div>
+
+        <div class="feature-card">
+          <span class="feature-icon">🐉</span>
+          <h3>Monster Roster</h3>
+          <p>Goblins, Orcs, and growing. Each monster has accurate stat blocks,
+             attack profiles, and weapon role assignment.</p>
+        </div>
+
+        <div class="feature-card">
+          <span class="feature-icon">📜</span>
+          <h3>JSON Scenarios</h3>
+          <p>Define any encounter in a simple JSON file — parties, monsters,
+             map layout, and starting positions.</p>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ── How it works ────────────────────────────────────────────────── -->
+  <section id="how">
+    <div class="container">
+      <div class="divider" style="margin-bottom: 2rem;"></div>
+      <h2>How It Works</h2>
+
+      <div class="steps reveal">
+
+        <div class="step">
+          <div class="step-num">I</div>
+          <div class="step-body">
+            <h3>Define Your Scenario</h3>
+            <p>Write a JSON file describing your party — classes, subclasses, stats,
+               items, and feats — alongside the monster encounter and map layout.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">II</div>
+          <div class="step-body">
+            <h3>Roll Initiative</h3>
+            <p>The engine places creatures on the map, rolls initiative, and
+               begins the encounter loop — one turn per creature, every round.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">III</div>
+          <div class="step-body">
+            <h3>Tactical AI Takes Over</h3>
+            <p>Each creature evaluates movement options, attack targets, and
+               available actions according to its strategy — rule-based, RL, or
+               evolutionary.</p>
+          </div>
+        </div>
+
+        <div class="step">
+          <div class="step-num">IV</div>
+          <div class="step-body">
+            <h3>Analyse the Results</h3>
+            <p>Win rates, round counts, tactic distributions, and convergence
+               graphs — run hundreds of episodes and see what actually works.</p>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Roadmap ──────────────────────────────────────────────────────── -->
+  <section id="roadmap">
+    <div class="container">
+      <div class="divider" style="margin-bottom: 2rem;"></div>
+      <h2>The Quest Log</h2>
+
+      <div class="scroll-wrapper reveal">
+
+        <div class="roadmap-item done">
+          <span class="rune">✦</span>
+          <span>Core 5e combat engine</span>
+        </div>
+        <div class="roadmap-item done">
+          <span class="rune">✦</span>
+          <span>Tactical AI &amp; team memory</span>
+        </div>
+        <div class="roadmap-item done">
+          <span class="rune">✦</span>
+          <span>RL &amp; evolutionary strategy training</span>
+        </div>
+        <div class="roadmap-item done">
+          <span class="rune">✦</span>
+          <span>JSON scenario loader</span>
+        </div>
+
+        <div class="roadmap-item">
+          <span class="rune">◈</span>
+          <span>REST API <span class="badge">In Progress</span></span>
+        </div>
+        <div class="roadmap-item">
+          <span class="rune">◈</span>
+          <span>Interactive web simulator</span>
+        </div>
+        <div class="roadmap-item">
+          <span class="rune">◈</span>
+          <span>Expanded monster roster</span>
+        </div>
+        <div class="roadmap-item">
+          <span class="rune">◈</span>
+          <span>More classes &amp; subclasses</span>
+        </div>
+        <div class="roadmap-item">
+          <span class="rune">◈</span>
+          <span>Custom character builder</span>
+        </div>
+        <div class="roadmap-item">
+          <span class="rune">◈</span>
+          <span>Save &amp; share scenarios</span>
+        </div>
+
+      </div>
+    </div>
+  </section>
+
+  <!-- ── CTA ─────────────────────────────────────────────────────────── -->
+  <section id="cta">
+    <div class="container">
+      <div class="divider" style="margin-bottom: 2rem;"></div>
+      <h2>Join the Party</h2>
+      <p>
+        DnDPython is an open-source project built by a D&amp;D player who wanted
+        to know: what does <em>optimal</em> actually look like in 5e combat?
+        Contributions, feedback, and feature requests are all welcome.
+      </p>
+      <div class="btn-group">
+        <a class="btn btn-primary" href="https://github.com/b-usrey/DnDPython" target="_blank" rel="noopener">
+          View on GitHub
+        </a>
+        <a class="btn btn-secondary" href="https://github.com/b-usrey/DnDPython/issues" target="_blank" rel="noopener">
+          Request a Feature
+        </a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ── Footer ──────────────────────────────────────────────────────── -->
+  <footer>
+    <p>
+      DnDPython &nbsp;·&nbsp;
+      <a href="https://github.com/b-usrey/DnDPython">GitHub</a>
+      &nbsp;·&nbsp;
+      Not affiliated with Wizards of the Coast
+    </p>
+  </footer>
+
+  <!-- ── Scroll reveal ────────────────────────────────────────────────── -->
+  <script>
+    const observer = new IntersectionObserver(
+      (entries) => entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('visible'); }),
+      { threshold: 0.12 }
+    );
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  </script>
+
+</body>
+</html>
