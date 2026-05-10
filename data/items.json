@@ -66,6 +66,34 @@
     "magic_bonus": 0,
     "Description": "Heavy armour, no DEX bonus"
   },
+  "Longsword": {
+    "name": "Longsword",
+    "type": "weapon",
+    "damage_die": "1d8",
+    "damageType": "slashing",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": ["versatile"]
+  },
+  "Shortsword": {
+    "name": "Shortsword",
+    "type": "weapon",
+    "damage_die": "1d6",
+    "damageType": "piercing",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": ["light", "finesse"]
+  },
     "Cloak of Protection": {
         "name": "Cloak of Protection",
         "type": "trinket",

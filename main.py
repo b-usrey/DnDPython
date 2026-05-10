@@ -32,10 +32,16 @@ def _eval_worker(args_tuple):
     """Module-level function so ProcessPoolExecutor can pickle it on Windows."""
     import io, contextlib
     scenario_data, weights_path, method, team, n = args_tuple
-    from core.ml_strategy import CombatEnv, RLStrategySelector, EvolutionarySelector, Strategy
+    from core.ml_strategy import CombatEnv, Strategy
+    from core.selectors.rl_selector import RLStrategySelector
+    from core.selectors.evo_selector import EvolutionarySelector
+    from core.selectors.dqn_selector import DQNStrategySelector
     env = CombatEnv(scenario_data=scenario_data, trained_team=team, silent=True)
     if method == "evo":
         sel = EvolutionarySelector()
+    elif method == "dqn":
+        sel = DQNStrategySelector()
+        sel.eps = 0.0
     else:
         sel = RLStrategySelector()
         sel.eps = 0.0
@@ -144,9 +150,17 @@ def main(args):
 
     # ── Attach trained model if supplied ────────────────────────────────
     if getattr(args, "load", None):
-        from core.ml_strategy import RLStrategySelector
+        from core.selectors.rl_selector import RLStrategySelector
+        from core.selectors.evo_selector import EvolutionarySelector
+        from core.selectors.dqn_selector import DQNStrategySelector
         from core.team_memory import TeamMemory
-        sel = RLStrategySelector()
+        method = getattr(args, "method", "rl")
+        if method == "evo":
+            sel = EvolutionarySelector()
+        elif method == "dqn":
+            sel = DQNStrategySelector()
+        else:
+            sel = RLStrategySelector()
         sel.load(args.load)
         sel.eps = 0.0   # pure exploitation — no random moves during a single run
         cm.ai.strategy_selector = sel
@@ -154,7 +168,8 @@ def main(args):
         # Ensure TeamMemory exists for the trained team so get_state_vector works
         if args.team not in cm.memories:
             cm.memories = TeamMemory.create_for_all_teams(battle_map, event)
-        print(f"  [ML] Loaded policy from {args.load} → controlling team '{args.team}' (ε=0)")
+        print(f"  [ML] Loaded {method.upper()} policy from {args.load} "
+              f"-> controlling team '{args.team}' (eps=0)")
 
     # ── Visualiser (optional; handles save_video internally) ────────────
     if not args.no_vis:
@@ -164,13 +179,24 @@ def main(args):
                          save_video=save_video,
                          video_path=video_path)
 
+    # ── Structured JSONL event log (optional) ───────────────────────────
+    log_json_path = getattr(args, "log_json", None)
+    combat_logger = None
+    if log_json_path:
+        from utils.combat_logger import CombatLogger
+        os.makedirs(os.path.dirname(log_json_path) or ".", exist_ok=True)
+        combat_logger = CombatLogger(event, initiative, log_json_path)
+        print(f"  [Log] JSONL event log -> {log_json_path}")
+
     outcome = cm.run()
     print(f"\nOutcome: {outcome}")
+
+    if combat_logger:
+        combat_logger.close()
 
     # ── Combat log (optional JSON) ───────────────────────────────────────
     log_path = getattr(args, "log_path", None)
     if log_path:
-        import json, os
         all_creatures = [c for _, c in cm.initiative.initiative_order]
         survivors     = [c for c in all_creatures if c.is_alive()]
         winning_team  = survivors[0].team if survivors else None
@@ -201,19 +227,23 @@ def main(args):
 def run_training(args):
     """Train a strategy selector using RL or evolutionary search."""
     import os
-    from core.ml_strategy import (
-        CombatEnv, RLStrategySelector, EvolutionarySelector,
-        StrategyTrainer, TrainingLog,
-    )
+    from core.ml_strategy import CombatEnv, TrainingLog
+    from core.selectors.rl_selector import RLStrategySelector
+    from core.selectors.evo_selector import EvolutionarySelector
+    from core.selectors.dqn_selector import DQNStrategySelector
+    from core.trainer import StrategyTrainer
 
-    scenario_data = load_json(args.json)
+    # Load one or more training scenarios.  Multiple --json files are mixed
+    # each episode so the policy generalises across encounters.
+    scenario_list = [load_json(j) for j in args.json]
     os.makedirs(args.save_dir, exist_ok=True)
 
-    run_name = args.run_name or os.path.splitext(args.json)[0]
-    log      = TrainingLog(name=run_name, trained_team=args.team)
+    base_name = os.path.splitext(args.json[0])[0] if len(args.json) == 1 else "multi"
+    run_name  = args.run_name or base_name
+    log       = TrainingLog(name=run_name, trained_team=args.team)
 
     env = CombatEnv(
-        scenario_data=scenario_data,
+        scenario_data=scenario_list,   # list → random pick per episode
         trained_team=args.team,
         silent=not args.verbose,
     )
@@ -262,6 +292,32 @@ def run_training(args):
         )
 
         weights_path = os.path.join(args.save_dir, f"{run_name}_evo.npy")
+        sel.save(weights_path)
+
+    elif args.method == "dqn":
+        sel = DQNStrategySelector(
+            hidden             = tuple(args.dqn_hidden),
+            lr                 = args.dqn_lr,
+            gamma              = args.gamma,
+            eps                = args.eps,
+            eps_min            = args.eps_min,
+            eps_decay          = args.eps_decay,
+            buffer_size        = args.dqn_buf,
+            batch_size         = args.dqn_batch,
+            target_update_freq = args.dqn_target_freq,
+        )
+        if args.load:
+            sel.load(args.load)
+
+        trainer = StrategyTrainer(env, sel)
+        trainer.train_dqn(
+            n_episodes  = args.episodes,
+            verbose     = True,
+            print_every = args.print_every,
+            log         = log,
+        )
+
+        weights_path = os.path.join(args.save_dir, f"{run_name}_dqn.pt")
         sel.save(weights_path)
 
     # Always save the log
@@ -536,16 +592,22 @@ if __name__ == "__main__":
                        help="Save the combat as mp4/gif via the visualiser")
     run_p.add_argument("--video-path", default="combat.mp4",
                        help="Output path for the video file (default: combat.mp4)")
+    # Trained model method selector
+    run_p.add_argument("--method",     choices=["rl", "evo", "dqn"], default="rl",
+                       help="Selector type matching the weights file (default: rl)")
     # Combat log
     run_p.add_argument("--log-path",   default=None,
                        help="If given, write a JSON combat log to this path")
+    run_p.add_argument("--log-json",   default=None,
+                       help="If given, write a JSONL structured event log to this path")
 
     # ── train: ML training loop ──────────────────────────────────────────
     train_p = sub.add_parser("train", help="Train a strategy selector")
-    train_p.add_argument("--json",      required=True,
-                         help="Scenario JSON filename (in scenarios/)")
-    train_p.add_argument("--method",    choices=["rl", "evo"], default="rl",
-                         help="Training method: rl (Q-table) or evo (evolutionary)")
+    train_p.add_argument("--json",      required=True, nargs="+",
+                         help="Scenario JSON filename(s) in scenarios/. "
+                              "Pass multiple to train across all scenarios.")
+    train_p.add_argument("--method",    choices=["rl", "evo", "dqn"], default="rl",
+                         help="Training method: rl (Q-table), evo (evolutionary), or dqn (deep Q-network)")
     train_p.add_argument("--team",      default="red",
                          help="Which team to train (default: red)")
     train_p.add_argument("--run-name",  default=None,
@@ -582,12 +644,24 @@ if __name__ == "__main__":
     evo_g.add_argument("--mutation-scale",  type=float, default=0.1)
     evo_g.add_argument("--crossover-rate",  type=float, default=0.5,
                        help="Probability of uniform crossover between two elite parents (0=mutation only)")
+    # DQN hyperparams
+    dqn_g = train_p.add_argument_group("DQN hyperparameters")
+    dqn_g.add_argument("--dqn-hidden",       type=int,   nargs="+", default=[64, 32],
+                       help="Hidden layer sizes (default: 64 32)")
+    dqn_g.add_argument("--dqn-lr",           type=float, default=1e-3,
+                       help="Adam learning rate (default: 1e-3)")
+    dqn_g.add_argument("--dqn-buf",          type=int,   default=10_000,
+                       help="Replay buffer capacity (default: 10000)")
+    dqn_g.add_argument("--dqn-batch",        type=int,   default=64,
+                       help="Minibatch size (default: 64)")
+    dqn_g.add_argument("--dqn-target-freq",  type=int,   default=100,
+                       help="Target network hard-update frequency in episodes (default: 100)")
 
     # ── eval: evaluate a trained selector against a random baseline ──────
     eval_p = sub.add_parser("eval", help="Evaluate a trained selector (ε=0) vs random baseline")
     eval_p.add_argument("--json",   required=True, help="Scenario JSON filename (in scenarios/)")
     eval_p.add_argument("--load",   required=True, help="Path to trained .npy weights file")
-    eval_p.add_argument("--method", choices=["rl", "evo"], default="rl",
+    eval_p.add_argument("--method", choices=["rl", "evo", "dqn"], default="rl",
                         help="Selector type matching the weights file (default: rl)")
     eval_p.add_argument("--team",   default="red", help="Trained team (default: red)")
     eval_p.add_argument("--n",      type=int, default=200,

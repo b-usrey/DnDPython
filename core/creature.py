@@ -259,6 +259,21 @@ class Creature:
         # dodging creature's next turn via start_turn().
         if target is self and self.has_condition("dodging"):
             attack.disadvantage = True
+        # Prone: attacker has disadvantage; melee vs prone = advantage,
+        # ranged vs prone = disadvantage (PHB p.292)
+        if attacker is self and self.has_condition("prone"):
+            attack.disadvantage = True
+        if target is self and self.has_condition("prone"):
+            if getattr(attack, "range", False):
+                attack.disadvantage = True
+            else:
+                attack.advantage = True
+        # Restrained: attacker has disadvantage, attacks against target
+        # have advantage (PHB p.292)
+        if attacker is self and self.has_condition("restrained"):
+            attack.disadvantage = True
+        if target is self and self.has_condition("restrained"):
+            attack.advantage = True
 
     def _on_damage_event(self, data):
         """
@@ -360,7 +375,7 @@ class Creature:
             self.features.append(feature)
             feature.attach(self, self.event_manager)
         else:
-            print(f"⚠ Feature '{name}' not found in registry")
+            print(f"[warn] Feature '{name}' not found in registry")
 
     # ── Initiative ────────────────────────────────────────────────────────
 
