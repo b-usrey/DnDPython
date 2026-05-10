@@ -449,6 +449,152 @@
     }
     footer a:hover { color: var(--gold); }
 
+    /* ── Simulator ──────────────────────────────────────────────────── */
+    .sim-panel {
+      background: linear-gradient(160deg, rgba(30,42,56,0.6), rgba(17,24,32,0.8));
+      border: 1px solid rgba(201,168,76,0.2);
+      padding: 2rem;
+      margin-top: 2.5rem;
+    }
+
+    .sim-controls {
+      display: flex;
+      gap: 1.5rem;
+      align-items: flex-end;
+      flex-wrap: wrap;
+      margin-bottom: 2rem;
+    }
+
+    .sim-field {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+
+    .sim-field label {
+      font-family: 'Cinzel', serif;
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+    }
+
+    .sim-field select,
+    .sim-field input[type="number"] {
+      background: var(--steel-dark);
+      border: 1px solid rgba(201,168,76,0.3);
+      color: var(--parchment);
+      font-family: 'Crimson Pro', serif;
+      font-size: 1rem;
+      padding: 0.5rem 0.75rem;
+      outline: none;
+      min-width: 220px;
+    }
+
+    .sim-field input[type="number"] { min-width: 80px; }
+
+    .sim-field select:focus,
+    .sim-field input:focus { border-color: var(--gold); }
+
+    .results-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .result-stat {
+      background: rgba(17,24,32,0.6);
+      border: 1px solid rgba(201,168,76,0.15);
+      border-top: 2px solid var(--gold-dim);
+      padding: 1rem;
+      text-align: center;
+    }
+
+    .result-label {
+      display: block;
+      font-family: 'Cinzel', serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      margin-bottom: 0.4rem;
+    }
+
+    .result-value {
+      display: block;
+      font-family: 'Cinzel Decorative', serif;
+      font-size: 1.6rem;
+      color: var(--gold);
+    }
+
+    .res-outcome {
+      font-style: italic;
+      color: rgba(242,232,213,0.75);
+      margin-bottom: 1.5rem;
+      font-size: 1rem;
+    }
+
+    .creature-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.95rem;
+      margin-bottom: 1.5rem;
+    }
+
+    .creature-table th {
+      font-family: 'Cinzel', serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      border-bottom: 1px solid rgba(201,168,76,0.2);
+      padding: 0.4rem 0.75rem;
+      text-align: left;
+    }
+
+    .creature-table td {
+      padding: 0.45rem 0.75rem;
+      border-bottom: 1px solid rgba(255,255,255,0.04);
+      color: rgba(242,232,213,0.8);
+    }
+
+    .creature-table tr.dead td { opacity: 0.45; }
+    .team-blue { color: #6ab0e8; }
+    .team-red  { color: #e87070; }
+
+    .log-details summary {
+      font-family: 'Cinzel', serif;
+      font-size: 0.75rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      cursor: pointer;
+      margin-bottom: 0.75rem;
+    }
+
+    .log-details summary:hover { color: var(--gold); }
+
+    #res-log {
+      background: rgba(0,0,0,0.4);
+      border: 1px solid rgba(201,168,76,0.1);
+      padding: 1rem;
+      font-size: 0.78rem;
+      line-height: 1.6;
+      color: rgba(242,232,213,0.65);
+      white-space: pre-wrap;
+      max-height: 320px;
+      overflow-y: auto;
+    }
+
+    .sim-error {
+      color: #e87070;
+      font-style: italic;
+      margin-top: 1rem;
+    }
+
+    .hidden { display: none; }
+
     /* ── Fade-in on scroll ──────────────────────────────────────────── */
     .reveal {
       opacity: 0;
@@ -475,6 +621,7 @@
     <a href="#demo">Demo</a>
     <a href="#features">Features</a>
     <a href="#how">How It Works</a>
+    <a href="#simulator">Simulator</a>
     <a href="#roadmap">Roadmap</a>
     <a href="#cta">Get Involved</a>
   </nav>
@@ -602,6 +749,63 @@
     </div>
   </section>
 
+  <!-- ── Simulator ──────────────────────────────────────────────────── -->
+  <section id="simulator">
+    <div class="container">
+      <div class="divider" style="margin-bottom: 2rem;"></div>
+      <h2>Live Simulator</h2>
+
+      <div class="sim-panel reveal">
+        <div class="sim-controls">
+          <div class="sim-field">
+            <label for="scenario-select">Scenario</label>
+            <select id="scenario-select">
+              <option value="">Loading scenarios…</option>
+            </select>
+          </div>
+          <div class="sim-field">
+            <label for="episodes-input">Episodes</label>
+            <input id="episodes-input" type="number" min="1" max="100" value="10" />
+          </div>
+          <button class="btn btn-primary" id="run-btn" onclick="runSim()">Roll Initiative</button>
+        </div>
+
+        <div id="sim-results" class="hidden">
+          <div class="results-grid">
+            <div class="result-stat">
+              <span class="result-label">Blue Win Rate</span>
+              <span class="result-value" id="res-winrate">—</span>
+            </div>
+            <div class="result-stat">
+              <span class="result-label">Avg Rounds</span>
+              <span class="result-value" id="res-rounds">—</span>
+            </div>
+            <div class="result-stat">
+              <span class="result-label">Episodes Run</span>
+              <span class="result-value" id="res-episodes">—</span>
+            </div>
+          </div>
+
+          <p id="res-outcome" class="res-outcome"></p>
+
+          <table class="creature-table" id="res-creatures">
+            <thead>
+              <tr><th>Name</th><th>Team</th><th>HP</th><th>Status</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+
+          <details class="log-details">
+            <summary>Combat Log (last episode)</summary>
+            <pre id="res-log"></pre>
+          </details>
+        </div>
+
+        <p id="sim-error" class="sim-error hidden"></p>
+      </div>
+    </div>
+  </section>
+
   <!-- ── Roadmap ──────────────────────────────────────────────────────── -->
   <section id="roadmap">
     <div class="container">
@@ -694,6 +898,87 @@
       { threshold: 0.12 }
     );
     document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+  </script>
+
+  <!-- ── Simulator ─────────────────────────────────────────────────────── -->
+  <script>
+    // Replace this with your Railway URL after deploying
+    const API_URL = "REPLACE_WITH_YOUR_RAILWAY_URL";
+
+    async function loadScenarios() {
+      const sel = document.getElementById("scenario-select");
+      try {
+        const res = await fetch(`${API_URL}/scenarios`);
+        const data = await res.json();
+        if (data.scenarios.length === 0) {
+          sel.innerHTML = '<option value="">No scenarios found</option>';
+          return;
+        }
+        sel.innerHTML = data.scenarios
+          .map(s => `<option value="${s}">${s.replace(".json", "").replace(/_/g, " ")}</option>`)
+          .join("");
+      } catch {
+        sel.innerHTML = '<option value="">Could not reach API</option>';
+      }
+    }
+
+    async function runSim() {
+      const btn = document.getElementById("run-btn");
+      const scenarioName = document.getElementById("scenario-select").value;
+      const episodes = Math.min(parseInt(document.getElementById("episodes-input").value) || 1, 100);
+      const errEl = document.getElementById("sim-error");
+      const resultsEl = document.getElementById("sim-results");
+
+      if (!scenarioName) {
+        errEl.textContent = "Please select a scenario first.";
+        errEl.classList.remove("hidden");
+        return;
+      }
+
+      errEl.classList.add("hidden");
+      resultsEl.classList.add("hidden");
+      btn.disabled = true;
+      btn.textContent = "Rolling…";
+
+      try {
+        const res = await fetch(`${API_URL}/simulate`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ scenario_name: scenarioName, episodes, silent: true })
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || res.statusText);
+        }
+        const data = await res.json();
+
+        document.getElementById("res-winrate").textContent = `${(data.win_rate * 100).toFixed(1)}%`;
+        document.getElementById("res-rounds").textContent = data.avg_rounds.toFixed(1);
+        document.getElementById("res-episodes").textContent = data.episodes_run;
+        document.getElementById("res-outcome").textContent = data.sample_outcome;
+
+        const tbody = document.querySelector("#res-creatures tbody");
+        tbody.innerHTML = data.creatures.map(c => `
+          <tr class="${c.alive ? "" : "dead"}">
+            <td>${c.name}</td>
+            <td class="team-${c.team}">${c.team}</td>
+            <td>${c.hp} / ${c.max_hp}</td>
+            <td>${c.alive ? "Alive" : "Dead"}</td>
+          </tr>
+        `).join("");
+
+        document.getElementById("res-log").textContent = data.log;
+        resultsEl.classList.remove("hidden");
+      } catch (e) {
+        errEl.textContent = `Error: ${e.message}`;
+        errEl.classList.remove("hidden");
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Roll Initiative";
+      }
+    }
+
+    document.addEventListener("DOMContentLoaded", loadScenarios);
   </script>
 
 </body>
