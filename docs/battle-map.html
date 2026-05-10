@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Battle Map Engine — DnDPython</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root { --ink: #0d0b0e; --parchment: #f2e8d5; --gold: #c9a84c; --gold-dim: #7a5f28; --steel-dark: #111820; --glow-hot: rgba(201,168,76,0.45); }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--steel-dark); color: var(--parchment); font-family: 'Crimson Pro', Georgia, serif; font-size: 18px; line-height: 1.7; min-height: 100vh; }
+    body::before { content: ''; position: fixed; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"); background-size: 200px; pointer-events: none; z-index: 0; opacity: 0.5; }
+    .page { max-width: 860px; margin: 0 auto; padding: 2rem; position: relative; z-index: 1; }
+    .page-header { display: flex; align-items: center; gap: 2rem; padding: 2rem 0 1.5rem; border-bottom: 1px solid rgba(201,168,76,0.2); margin-bottom: 2.5rem; }
+    .back-link { font-family: 'Cinzel', serif; font-size: 0.75rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold-dim); text-decoration: none; white-space: nowrap; flex-shrink: 0; }
+    .back-link:hover { color: var(--gold); }
+    .page-title { font-family: 'Cinzel Decorative', serif; font-size: clamp(1.4rem, 4vw, 2.2rem); color: var(--gold); text-shadow: 0 0 30px var(--glow-hot); }
+    .page-subtitle { font-family: 'Cinzel', serif; font-size: 0.8rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold-dim); margin-top: 0.3rem; }
+    h2 { font-family: 'Cinzel', serif; font-size: 1rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); margin: 2rem 0 0.75rem; padding-bottom: 0.4rem; border-bottom: 1px solid rgba(201,168,76,0.2); }
+    p { color: rgba(242,232,213,0.82); margin-bottom: 0.9rem; font-size: 0.97rem; }
+
+    .feature-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin: 1rem 0 1.75rem; }
+    .feat { background: linear-gradient(160deg, rgba(30,42,56,0.5), rgba(17,24,32,0.7)); border: 1px solid rgba(201,168,76,0.15); border-top: 2px solid var(--gold-dim); padding: 1rem 1.1rem; }
+    .feat h3 { font-family: 'Cinzel', serif; font-size: 0.72rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); margin-bottom: 0.4rem; }
+    .feat p { font-size: 0.88rem; color: rgba(242,232,213,0.65); margin: 0; }
+
+    .tile-table { width: 100%; border-collapse: collapse; font-size: 0.9rem; margin: 0.75rem 0 1.5rem; }
+    .tile-table th { font-family: 'Cinzel', serif; font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold-dim); border-bottom: 1px solid rgba(201,168,76,0.2); padding: 0.4rem 0.75rem; text-align: left; }
+    .tile-table td { padding: 0.4rem 0.75rem; border-bottom: 1px solid rgba(255,255,255,0.04); color: rgba(242,232,213,0.78); }
+
+    .callout { background: rgba(201,168,76,0.06); border: 1px solid rgba(201,168,76,0.15); border-left: 3px solid var(--gold-dim); padding: 0.85rem 1.1rem; font-size: 0.9rem; color: rgba(242,232,213,0.65); margin: 0.75rem 0 1.5rem; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <a class="back-link" href="index.html">← Home</a>
+      <div>
+        <h1 class="page-title">🗺️ Battle Map Engine</h1>
+        <p class="page-subtitle">Grid, Movement &amp; Range</p>
+      </div>
+    </header>
+
+    <p>The battle map is a rectangular grid where each square represents 5 feet, matching the D&amp;D 5e ruleset. Every creature occupies one square, and all movement, range, and line-of-sight calculations are resolved on this grid each turn.</p>
+
+    <h2>Tile Types</h2>
+    <table class="tile-table">
+      <thead><tr><th>Type</th><th>Passable</th><th>Movement Cost</th><th>Notes</th></tr></thead>
+      <tbody>
+        <tr><td>Normal</td><td>Yes</td><td>1× speed</td><td>Standard floor or open ground.</td></tr>
+        <tr><td>Difficult Terrain</td><td>Yes</td><td>2× speed</td><td>Each square costs double movement to enter.</td></tr>
+        <tr><td>Wall</td><td>No</td><td>Impassable</td><td>Blocks movement and line of sight.</td></tr>
+        <tr><td>Water</td><td>Yes</td><td>2× speed</td><td>Treated as difficult terrain.</td></tr>
+      </tbody>
+    </table>
+
+    <h2>Movement</h2>
+    <p>Distance is calculated using Chebyshev distance (diagonal movement costs the same as cardinal), which is the standard for D&amp;D 5e on a square grid. Each step along a planned path is charged individually so difficult terrain and opportunity attacks are applied at the right moment.</p>
+
+    <div class="callout">
+      <strong>Opportunity Attacks:</strong> when a creature leaves a square threatened by an enemy, that enemy may use its reaction to make an immediate attack before the move is committed.
+    </div>
+
+    <h2>Range &amp; Attack Validation</h2>
+    <div class="feature-grid">
+      <div class="feat"><h3>Melee Range</h3><p>Default 5 ft. (one square). Extended to 10 ft. for reach weapons.</p></div>
+      <div class="feat"><h3>Ranged — Normal</h3><p>Attack rolls within normal range have no penalty.</p></div>
+      <div class="feat"><h3>Ranged — Long</h3><p>Attacks between normal and long range are made with disadvantage.</p></div>
+      <div class="feat"><h3>Point-Blank</h3><p>Firing a ranged weapon while an enemy is adjacent imposes disadvantage.</p></div>
+    </div>
+
+    <h2>Map Definition</h2>
+    <p>Maps are defined inline in the scenario JSON. Walls and difficult terrain are specified as rectangles <code style="background:rgba(255,255,255,0.07);padding:0.1em 0.4em;font-size:0.85em;">[col, row, width, height]</code>, and creature starting positions are keyed by name.</p>
+
+    <div class="callout">
+      Example: <code style="font-size:0.82em;">"walls": [[5, 0, 1, 8]]</code> places a wall 1 tile wide and 8 tiles tall starting at column 5, row 0 — splitting the map in two.
+    </div>
+  </div>
+</body>
+</html>

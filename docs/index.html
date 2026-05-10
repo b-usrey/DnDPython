@@ -225,6 +225,12 @@
       margin-top: 2.5rem;
     }
 
+    a.feature-card {
+      text-decoration: none;
+      color: inherit;
+      display: block;
+    }
+
     .feature-card {
       background: linear-gradient(135deg, rgba(30,42,56,0.8), rgba(17,24,32,0.9));
       border: 1px solid rgba(201,168,76,0.15);
@@ -240,6 +246,18 @@
       transform: translateY(-3px);
       box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 20px var(--glow);
     }
+
+    .feature-card .card-more {
+      display: block;
+      font-family: 'Cinzel', serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.15em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      margin-top: 1rem;
+      transition: color 0.2s;
+    }
+    .feature-card:hover .card-more { color: var(--gold); }
 
     .feature-icon {
       font-size: 2rem;
@@ -508,47 +526,53 @@
 
       <div class="features-grid reveal">
 
-        <div class="feature-card">
+        <a href="battle-map.html" class="feature-card">
           <span class="feature-icon">🗺️</span>
           <h3>Battle Map Engine</h3>
           <p>Grid-based maps with walls, difficult terrain, line-of-sight, and
              range calculations — faithful to the 5e ruleset.</p>
-        </div>
+          <span class="card-more">Explore →</span>
+        </a>
 
-        <div class="feature-card">
+        <a href="tactical-ai.html" class="feature-card">
           <span class="feature-icon">🧠</span>
           <h3>Tactical AI</h3>
           <p>Creatures don't just swing randomly. The AI evaluates positioning,
              target priority, and action economy each turn.</p>
-        </div>
+          <span class="card-more">Explore →</span>
+        </a>
 
-        <div class="feature-card">
+        <a href="ml-strategies.html" class="feature-card">
           <span class="feature-icon">🤖</span>
           <h3>Machine Learning Strategies</h3>
           <p>Reinforcement learning and evolutionary algorithms that train
              combat strategies over thousands of simulated encounters.</p>
-        </div>
+          <span class="card-more">Explore →</span>
+        </a>
 
-        <div class="feature-card">
+        <a href="classes.html" class="feature-card">
           <span class="feature-icon">⚔️</span>
           <h3>Classes &amp; Subclasses</h3>
           <p>Fighter (Champion), Ranger (Gloomstalker) with authentic class
              features, fighting styles, spells, and feat support.</p>
-        </div>
+          <span class="card-more">Explore →</span>
+        </a>
 
-        <div class="feature-card">
+        <a href="monsters.html" class="feature-card">
           <span class="feature-icon">🐉</span>
           <h3>Monster Roster</h3>
           <p>Goblins, Orcs, and growing. Each monster has accurate stat blocks,
              attack profiles, and weapon role assignment.</p>
-        </div>
+          <span class="card-more">Explore →</span>
+        </a>
 
-        <div class="feature-card">
+        <a href="scenarios.html" class="feature-card">
           <span class="feature-icon">📜</span>
           <h3>JSON Scenarios</h3>
           <p>Define any encounter in a simple JSON file — parties, monsters,
              map layout, and starting positions.</p>
-        </div>
+          <span class="card-more">Explore →</span>
+        </a>
 
       </div>
     </div>
