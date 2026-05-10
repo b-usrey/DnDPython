@@ -38,10 +38,7 @@ class ScenarioLoader:
             pc.setup_ac()
             pc._max_hp = int(pc._current_hp)
 
-            # Extra features (like feats not tied to class/subclass)
-            for fname in pdata.get("features", []):
-                if fname in Feature.REGISTRY:
-                    pc.features.append(Feature.REGISTRY[fname]())
+            # Features are already attached via PlayerCharacter.__init__ feats loop.
 
             players.append(pc)
 

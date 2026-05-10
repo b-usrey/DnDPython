@@ -303,3 +303,41 @@ class IndomitableIII(Feature):
 class RemarkableAthlete(Feature):
     """Non-combat skill bonus — no combat implementation needed."""
     name = "Remarkable Athlete"
+
+
+# ---------------------------------------------------------------------------
+# Fighting Style — Two-Weapon Fighting
+# ---------------------------------------------------------------------------
+
+class TwoWeaponFightingStyle(Feature):
+    """
+    Fighting Style: when you engage in two-weapon fighting you add your
+    ability modifier to the damage of the off-hand attack.
+    Sets twf_style=True on the owner; CombatManager reads this flag.
+    """
+    name = "Two-Weapon Fighting"
+
+    def attach(self, owner, bus):
+        super().attach(owner, bus)
+        owner.twf_style = True
+        print(f"  {owner.name}: Two-Weapon Fighting style "
+              f"(off-hand adds ability mod to damage)")
+
+
+# ---------------------------------------------------------------------------
+# Feat — Dual Wielder
+# ---------------------------------------------------------------------------
+
+class DualWielder(Feature):
+    """
+    Feat: gain +1 AC while wielding a separate melee weapon in each hand,
+    and you can use two-weapon fighting even when the weapons aren't light.
+    Sets dual_wielder=True so _try_twf_attack skips the light-weapon check.
+    """
+    name = "Dual Wielder"
+
+    def attach(self, owner, bus):
+        super().attach(owner, bus)
+        owner.dual_wielder = True
+        owner.apply_misc_ac(1)
+        print(f"  {owner.name}: Dual Wielder (+1 AC, non-light weapons qualify for TWF)")
