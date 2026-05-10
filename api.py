@@ -67,7 +67,10 @@ class SimulateRequest(BaseModel):
     episodes: int = 1
     max_episodes: int = 100
     silent: bool = True
-    strategy: str | None = None  # aggressive, kite, retreat, focus_fire, protect
+    strategy: str | None = None      # aggressive, kite, retreat, focus_fire, protect
+    model_path: str | None = None    # path to a saved model file
+    model_type: str = "dqn"          # dqn | rl | evo
+    trained_team: str = "red"        # which team the loaded model controls
 
 
 class CreatureSummary(BaseModel):
@@ -91,7 +94,14 @@ class SimulateResponse(BaseModel):
 
 import random as _random
 
-def _run_episode(scenario_data: dict, silent: bool = True, strategy: str | None = None) -> dict:
+def _run_episode(
+    scenario_data: dict,
+    silent: bool = True,
+    strategy: str | None = None,
+    model_path: str | None = None,
+    model_type: str = "dqn",
+    trained_team: str = "red",
+) -> dict:
     """Run a single combat episode. Returns a plain dict with episode results."""
     captured = io.StringIO()
     ctx = contextlib.redirect_stdout(captured) if silent else contextlib.nullcontext()
@@ -134,7 +144,25 @@ def _run_episode(scenario_data: dict, silent: bool = True, strategy: str | None 
         initiative = InitiativeManager(players + monsters, event)
         max_rounds = scenario_data.get("max_rounds", 100)
         cm = CombatManager(event, initiative, battle_map, max_rounds=max_rounds)
-        if strategy:
+        if model_path:
+            full_path = str(ROOT / model_path)
+            if model_type == "rl":
+                from core.selectors.rl_selector import RLStrategySelector
+                sel = RLStrategySelector()
+                sel.load(full_path)
+                sel.eps = 0.0
+            elif model_type == "evo":
+                from core.selectors.evo_selector import EvolutionarySelector
+                sel = EvolutionarySelector()
+                sel.load(full_path)
+            else:
+                from core.selectors.dqn_selector import DQNStrategySelector
+                sel = DQNStrategySelector()
+                sel.load(full_path)
+                sel.eps = 0.0
+            cm.ai.strategy_selector = sel
+            cm.ai.trained_team = trained_team
+        elif strategy:
             from core.ml_strategy import Strategy as StrategyEnum
             try:
                 cm.ai.current_strategy = StrategyEnum[strategy.upper()]
@@ -231,7 +259,14 @@ def simulate(req: SimulateRequest):
 
     try:
         for _ in range(n):
-            last = _run_episode(scenario_data, silent=req.silent, strategy=req.strategy)
+            last = _run_episode(
+                scenario_data,
+                silent=req.silent,
+                strategy=req.strategy,
+                model_path=req.model_path,
+                model_type=req.model_type,
+                trained_team=req.trained_team,
+            )
             wins[last["winner"] or "none"] += 1
             total_rounds += last["rounds"]
     except Exception as exc:

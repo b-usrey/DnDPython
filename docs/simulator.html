@@ -129,7 +129,8 @@
     }
 
     .field select,
-    .field input[type="number"] {
+    .field input[type="number"],
+    .field input[type="text"] {
       background: var(--steel-dark);
       border: 1px solid rgba(201,168,76,0.3);
       color: var(--parchment);
@@ -347,6 +348,29 @@
           </div>
         </div>
 
+        <div class="field">
+          <label for="model-path">Trained Model Path</label>
+          <input id="model-path" type="text" placeholder="docs/models/my_model.pt" />
+          <span class="field-hint">Place trained models in docs/models/ to deploy them. Overrides the strategy dropdown.</span>
+        </div>
+
+        <div class="field">
+          <label for="model-type">Model Type</label>
+          <select id="model-type">
+            <option value="dqn">DQN (.pt)</option>
+            <option value="rl">RL Q-Table (.npy)</option>
+            <option value="evo">Evolutionary (.npy)</option>
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="trained-team">Model Controls Team</label>
+          <select id="trained-team">
+            <option value="red">Red (monsters)</option>
+            <option value="blue">Blue (players)</option>
+          </select>
+        </div>
+
         <button class="run-btn" id="run-btn" onclick="runSim()">Roll Initiative</button>
         <p id="sim-error" class="error-msg hidden"></p>
       </aside>
@@ -435,6 +459,9 @@
       const scenarioName = document.getElementById("scenario-select").value;
       const episodes     = Math.min(parseInt(document.getElementById("episodes-input").value) || 1, 100);
       const strategy     = document.getElementById("strategy-select").value || null;
+      const modelPath    = document.getElementById("model-path").value.trim() || null;
+      const modelType    = document.getElementById("model-type").value;
+      const trainedTeam  = document.getElementById("trained-team").value;
       const errEl        = document.getElementById("sim-error");
       const resultsEl    = document.getElementById("sim-results");
       const placeholder  = document.getElementById("results-placeholder");
@@ -453,7 +480,7 @@
         const res = await fetch(`${API_URL}/simulate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scenario_name: scenarioName, episodes, silent: true, strategy })
+          body: JSON.stringify({ scenario_name: scenarioName, episodes, silent: true, strategy, model_path: modelPath, model_type: modelType, trained_team: trainedTeam })
         });
         if (!res.ok) {
           const err = await res.json();
