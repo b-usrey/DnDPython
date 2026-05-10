@@ -64,9 +64,10 @@ app.add_middleware(
 class SimulateRequest(BaseModel):
     scenario: dict[str, Any] | None = None
     scenario_name: str | None = None
-    episodes: int = 1          # how many fights to run
-    max_episodes: int = 100    # hard cap — ignore if user sends more
+    episodes: int = 1
+    max_episodes: int = 100
     silent: bool = True
+    strategy: str | None = None  # aggressive, kite, retreat, focus_fire, protect
 
 
 class CreatureSummary(BaseModel):
@@ -90,7 +91,7 @@ class SimulateResponse(BaseModel):
 
 import random as _random
 
-def _run_episode(scenario_data: dict, silent: bool = True) -> dict:
+def _run_episode(scenario_data: dict, silent: bool = True, strategy: str | None = None) -> dict:
     """Run a single combat episode. Returns a plain dict with episode results."""
     captured = io.StringIO()
     ctx = contextlib.redirect_stdout(captured) if silent else contextlib.nullcontext()
@@ -133,6 +134,12 @@ def _run_episode(scenario_data: dict, silent: bool = True) -> dict:
         initiative = InitiativeManager(players + monsters, event)
         max_rounds = scenario_data.get("max_rounds", 100)
         cm = CombatManager(event, initiative, battle_map, max_rounds=max_rounds)
+        if strategy:
+            from core.ml_strategy import Strategy as StrategyEnum
+            try:
+                cm.ai.current_strategy = StrategyEnum[strategy.upper()]
+            except KeyError:
+                pass
         outcome = cm.run()
 
     log = captured.getvalue()
@@ -224,7 +231,7 @@ def simulate(req: SimulateRequest):
 
     try:
         for _ in range(n):
-            last = _run_episode(scenario_data, silent=req.silent)
+            last = _run_episode(scenario_data, silent=req.silent, strategy=req.strategy)
             wins[last["winner"] or "none"] += 1
             total_rounds += last["rounds"]
     except Exception as exc:
