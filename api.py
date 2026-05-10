@@ -83,12 +83,13 @@ class CreatureSummary(BaseModel):
 
 class SimulateResponse(BaseModel):
     episodes_run: int
-    wins: dict[str, int]       # e.g. {"blue": 7, "red": 2, "none": 1}
-    win_rate: float            # blue team win rate
+    wins: dict[str, int]             # e.g. {"blue": 7, "red": 2, "none": 1}
+    win_rate: float                  # blue team win rate
     avg_rounds: float
-    sample_outcome: str        # last episode's outcome string
-    creatures: list[CreatureSummary]  # last episode's final state
-    log: str                   # last episode's combat log
+    sample_outcome: str              # last episode's outcome string
+    creatures: list[CreatureSummary] # last episode's final state
+    log: str                         # last episode's combat log
+    tactic_distribution: dict[str, int] = {}  # strategy name -> times chosen (model only)
 
 # ── Helper ────────────────────────────────────────────────────────────────────
 
@@ -172,6 +173,12 @@ def _run_episode(
 
     log = captured.getvalue()
 
+    sel = cm.ai.strategy_selector
+    tactic_counts = (
+        {s.name.lower(): c for s, c in sel.tactic_counts.items() if c > 0}
+        if sel is not None else {}
+    )
+
     outcome_lower = outcome.lower()
     if "blue" in outcome_lower:
         winner = "blue"
@@ -198,6 +205,7 @@ def _run_episode(
         "rounds": cm.initiative.round,
         "creatures": summaries,
         "log": log,
+        "tactic_counts": tactic_counts,
     }
 
 
@@ -255,6 +263,7 @@ def simulate(req: SimulateRequest):
     n = min(req.episodes, req.max_episodes)
     wins: dict[str, int] = {"blue": 0, "red": 0, "none": 0}
     total_rounds = 0
+    tactic_totals: dict[str, int] = {}
     last: dict = {}
 
     try:
@@ -269,6 +278,8 @@ def simulate(req: SimulateRequest):
             )
             wins[last["winner"] or "none"] += 1
             total_rounds += last["rounds"]
+            for tactic, count in last.get("tactic_counts", {}).items():
+                tactic_totals[tactic] = tactic_totals.get(tactic, 0) + count
     except Exception as exc:
         raise HTTPException(status_code=500, detail=str(exc))
 
@@ -280,10 +291,41 @@ def simulate(req: SimulateRequest):
         sample_outcome=last.get("outcome", ""),
         creatures=last.get("creatures", []),
         log=last.get("log", ""),
+        tactic_distribution=tactic_totals,
     )
+
+
+@app.get("/models", summary="List available trained models")
+def list_models():
+    """Returns model files in docs/models/ with inferred types."""
+    models_dir = ROOT / "docs" / "models"
+    if not models_dir.exists():
+        return {"models": []}
+    models = []
+    for f in sorted(models_dir.iterdir()):
+        if f.suffix in (".pt", ".pth"):
+            model_type = "dqn"
+        elif f.suffix == ".npy":
+            model_type = "rl"  # user can override to "evo" in the UI
+        else:
+            continue
+        models.append({
+            "name": f.name,
+            "path": f"docs/models/{f.name}",
+            "type": model_type,
+        })
+    return {"models": models}
 
 
 @app.get("/monsters", summary="List known monster types")
 def list_monsters():
     """Returns all monster types registered in MONSTER_REGISTRY."""
     return {"monsters": sorted(MONSTER_REGISTRY.keys())}
+
+
+@app.get("/monsters/{name}", summary="Get a monster's full stat block")
+def get_monster(name: str):
+    key = name.upper()
+    if key not in MONSTER_REGISTRY:
+        raise HTTPException(status_code=404, detail=f"Monster '{name}' not found.")
+    return MONSTER_REGISTRY[key]

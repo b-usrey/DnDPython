@@ -302,6 +302,12 @@
       overflow-y: auto;
     }
 
+    .tactic-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; font-size: 0.88rem; }
+    .tactic-label { font-family: 'Cinzel', serif; font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold-dim); width: 90px; flex-shrink: 0; }
+    .tactic-bar-wrap { flex: 1; background: rgba(0,0,0,0.3); height: 14px; }
+    .tactic-bar { height: 100%; background: var(--gold-dim); transition: width 0.4s; }
+    .tactic-count { color: rgba(242,232,213,0.55); width: 50px; text-align: right; flex-shrink: 0; }
+
     .hidden { display: none; }
   </style>
 </head>
@@ -411,6 +417,11 @@
             <tbody id="res-creatures"></tbody>
           </table>
 
+          <div id="res-tactics-wrap" class="hidden">
+            <p class="panel-title" style="margin-bottom:0.75rem;">Tactic Distribution (model decisions)</p>
+            <div id="res-tactics"></div>
+          </div>
+
           <details class="log-details">
             <summary>Combat Log (last episode)</summary>
             <pre id="res-log"></pre>
@@ -505,6 +516,25 @@
         `).join("");
 
         document.getElementById("res-log").textContent = data.log;
+
+        const tacticsWrap = document.getElementById("res-tactics-wrap");
+        const tacticsDiv  = document.getElementById("res-tactics");
+        if (data.tactic_distribution && Object.keys(data.tactic_distribution).length > 0) {
+          const total = Object.values(data.tactic_distribution).reduce((a, b) => a + b, 0);
+          tacticsDiv.innerHTML = Object.entries(data.tactic_distribution)
+            .sort((a, b) => b[1] - a[1])
+            .map(([name, count]) => {
+              const pct = total > 0 ? (count / total * 100).toFixed(1) : 0;
+              return `<div class="tactic-row">
+                <span class="tactic-label">${name}</span>
+                <div class="tactic-bar-wrap"><div class="tactic-bar" style="width:${pct}%"></div></div>
+                <span class="tactic-count">${count}</span>
+              </div>`;
+            }).join("");
+          tacticsWrap.classList.remove("hidden");
+        } else {
+          tacticsWrap.classList.add("hidden");
+        }
 
         placeholder.classList.add("hidden");
         resultsEl.classList.remove("hidden");

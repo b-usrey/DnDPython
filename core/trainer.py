@@ -328,16 +328,27 @@ class StrategyTrainer:
                     epsilon=round(self.selector.eps, 4),
                 )
 
-            if verbose and (ep + 1) % print_every == 0:
-                recent   = episode_rewards[-print_every:]
-                win_rate = sum(1 for r in recent if r > 0) / len(recent)
+            if verbose:
+                pct    = (ep + 1) / n_episodes
+                filled = int(30 * pct)
+                bar    = "█" * filled + "░" * (30 - filled)
+                recent = episode_rewards[max(0, ep + 1 - print_every):]
+                wr     = sum(1 for r in recent if r > 0) / len(recent)
                 print(
-                    f"  [DQN] ep {ep+1}/{n_episodes}  "
-                    f"avg_reward={np.mean(recent):.3f}  "
-                    f"win_rate={win_rate:.0%}  "
-                    f"eps={self.selector.eps:.3f}"
+                    f"\r  [DQN] [{bar}] {ep+1}/{n_episodes}  "
+                    f"win={wr:.0%}  ε={self.selector.eps:.3f}",
+                    end="", flush=True,
                 )
+                if (ep + 1) % print_every == 0:
+                    print(
+                        f"\n  [DQN] ep {ep+1}/{n_episodes}  "
+                        f"avg_reward={np.mean(recent):.3f}  "
+                        f"win_rate={wr:.0%}  "
+                        f"eps={self.selector.eps:.3f}"
+                    )
 
+        if verbose:
+            print()  # end the final bar line
         self.selector.select = _orig_select
         if log is not None:
             print(f"\n  {log.summary()}")
