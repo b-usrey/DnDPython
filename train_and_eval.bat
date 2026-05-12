@@ -10,7 +10,7 @@ setlocal EnableDelayedExpansion
 :: ============================================================
 
 :: ── CONFIG ──────────────────────────────────────────────────
-set RUN_NAME=overnight_run_20260425
+set RUN_NAME=overnight_run_20260511
 set TRAIN_SCENARIOS=brendiir_vs_goblins.json brendiir_vs_orcs.json
 set EVAL_SCENARIOS=brendiir_vs_goblins.json brendiir_vs_orcs.json brendiir_vs_hobgoblins.json
 set PYTHON=python
