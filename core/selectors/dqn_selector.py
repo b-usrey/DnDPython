@@ -188,8 +188,14 @@ class DQNStrategySelector(StrategySelector):
 
     def load(self, path: str):
         ckpt = torch.load(path, map_location=self._device, weights_only=True)
+        n_obs  = ckpt.get("n_obs", self.n_obs)
+        hidden = tuple(ckpt.get("hidden_sizes", [64, 32]))
+        self.n_obs   = n_obs
+        self._online = _QNet(n_obs, hidden, N_STRATEGIES).to(self._device)
+        self._target = _QNet(n_obs, hidden, N_STRATEGIES).to(self._device)
         self._online.load_state_dict(ckpt["online"])
         self._target.load_state_dict(ckpt["target"])
-        self.eps = ckpt.get("eps", self.eps_min)
+        self._online.eval()
         self._target.eval()
+        self.eps = ckpt.get("eps", self.eps_min)
         print(f"  [DQN] weights loaded ← {path}  (ε={self.eps:.3f})")
