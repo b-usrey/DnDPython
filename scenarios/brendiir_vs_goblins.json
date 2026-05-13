@@ -42,5 +42,8 @@
       "type":"ORC",
       "count":2
     }
-  ]
+  ],
+  "rewards": {
+    "damage_scale": 0.02
+  }
 }

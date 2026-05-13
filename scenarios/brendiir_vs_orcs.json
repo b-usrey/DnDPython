@@ -58,5 +58,8 @@
       "count": 8,
       "weapon_role": "ranged"
     }
-  ]
+  ],
+  "rewards": {
+    "damage_scale": 0.02
+  }
 }
