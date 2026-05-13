@@ -1,0 +1,1417 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Character Builder — DnDPython</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet" />
+
+  <style>
+    :root {
+      --ink:        #0d0b0e;
+      --parchment:  #f2e8d5;
+      --gold:       #c9a84c;
+      --gold-dim:   #7a5f28;
+      --crimson:    #8b1a1a;
+      --steel:      #3a4a5c;
+      --steel-mid:  #1e2a38;
+      --steel-dark: #111820;
+      --glow:       rgba(201,168,76,0.18);
+      --glow-hot:   rgba(201,168,76,0.45);
+    }
+
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html { scroll-behavior: smooth; }
+
+    body {
+      background-color: var(--steel-dark);
+      color: var(--parchment);
+      font-family: 'Crimson Pro', Georgia, serif;
+      font-size: 18px;
+      line-height: 1.7;
+      overflow-x: hidden;
+    }
+
+    body::before {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+      background-size: 200px 200px;
+      pointer-events: none;
+      z-index: 0;
+      opacity: 0.5;
+    }
+
+    .container {
+      max-width: 960px;
+      margin: 0 auto;
+      padding: 0 2rem;
+      position: relative;
+      z-index: 1;
+    }
+
+    .divider {
+      width: 120px; height: 1px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+      margin: 0 auto;
+    }
+
+    /* ── Header ── */
+    header {
+      position: relative;
+      text-align: center;
+      padding: 3rem 2rem 2rem;
+      overflow: hidden;
+    }
+    header::after {
+      content: '';
+      position: absolute;
+      top: 10%; left: 50%;
+      transform: translateX(-50%);
+      width: 600px; height: 200px;
+      background: radial-gradient(ellipse, var(--glow-hot) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .crest { font-size: 2.5rem; margin-bottom: 0.75rem; position: relative; z-index: 1; }
+    h1 {
+      font-family: 'Cinzel Decorative', serif;
+      font-size: clamp(1.6rem, 4vw, 2.8rem);
+      color: var(--gold);
+      letter-spacing: 0.04em;
+      line-height: 1.15;
+      text-shadow: 0 0 40px var(--glow-hot), 0 2px 8px rgba(0,0,0,0.8);
+      position: relative; z-index: 1;
+    }
+    .subtitle {
+      font-family: 'Cinzel', serif;
+      font-size: 0.85rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      margin-top: 0.5rem;
+      position: relative; z-index: 1;
+    }
+
+    /* ── Nav ── */
+    nav {
+      display: flex;
+      justify-content: center;
+      gap: 2.5rem;
+      padding: 1rem 0;
+      border-top: 1px solid rgba(201,168,76,0.2);
+      border-bottom: 1px solid rgba(201,168,76,0.2);
+      margin-bottom: 2rem;
+      position: relative; z-index: 1;
+    }
+    nav a {
+      font-family: 'Cinzel', serif;
+      font-size: 0.75rem;
+      letter-spacing: 0.2em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      text-decoration: none;
+      transition: color 0.2s;
+    }
+    nav a:hover, nav a.active { color: var(--gold); }
+
+    /* ── API bar ── */
+    .api-bar {
+      background: rgba(30,42,56,0.6);
+      border: 1px solid rgba(201,168,76,0.15);
+      border-left: 3px solid var(--gold-dim);
+      padding: 0.6rem 1.5rem;
+      margin-bottom: 2rem;
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      flex-wrap: wrap;
+      position: relative; z-index: 1;
+    }
+    .api-bar label {
+      font-family: 'Cinzel', serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+    }
+    .api-bar input[type="text"] {
+      background: rgba(17,24,32,0.8);
+      border: 1px solid rgba(201,168,76,0.3);
+      color: var(--parchment);
+      font-family: monospace;
+      font-size: 0.85rem;
+      padding: 0.3rem 0.7rem;
+      width: 240px;
+    }
+    .api-bar input:focus { outline: none; border-color: var(--gold); }
+    #apiStatus { font-family: 'Cinzel', serif; font-size: 0.7rem; letter-spacing: 0.1em; }
+    #apiStatus.ok     { color: #4caf50; }
+    #apiStatus.err    { color: #c0392b; }
+    #apiStatus.loading { color: var(--gold-dim); }
+
+    /* ── Wizard progress ── */
+    .wizard-progress {
+      display: flex;
+      justify-content: center;
+      margin-bottom: 2.5rem;
+      position: relative; z-index: 1;
+    }
+    .prog-step {
+      flex: 1;
+      max-width: 160px;
+      text-align: center;
+      padding: 0.65rem 0.4rem;
+      font-family: 'Cinzel', serif;
+      font-size: 0.62rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+      border: 1px solid rgba(201,168,76,0.15);
+      border-right: none;
+      cursor: pointer;
+      transition: all 0.2s;
+      background: rgba(17,24,32,0.6);
+      border-top: 2px solid transparent;
+    }
+    .prog-step:last-child { border-right: 1px solid rgba(201,168,76,0.15); }
+    .prog-step .pnum {
+      display: block;
+      font-family: 'Cinzel Decorative', serif;
+      font-size: 0.85rem;
+      color: var(--gold-dim);
+      margin-bottom: 0.15rem;
+    }
+    .prog-step.active { background: rgba(201,168,76,0.1); color: var(--gold); border-top-color: var(--gold); }
+    .prog-step.active .pnum { color: var(--gold); }
+    .prog-step.done   { background: rgba(76,175,80,0.06); color: rgba(242,232,213,0.45); border-top-color: #4caf50; }
+    .prog-step.done .pnum { color: #4caf50; }
+    .prog-step:not(.active):hover { color: var(--parchment); }
+
+    /* ── Step panels ── */
+    .step-panel { display: none; position: relative; z-index: 1; }
+    .step-panel.active { display: block; }
+
+    /* ── Form sections ── */
+    .form-section {
+      background: linear-gradient(135deg, rgba(30,42,56,0.8), rgba(17,24,32,0.9));
+      border: 1px solid rgba(201,168,76,0.15);
+      border-top: 2px solid var(--gold-dim);
+      padding: 1.75rem;
+      margin-bottom: 1.5rem;
+    }
+    .form-section h3 {
+      font-family: 'Cinzel', serif;
+      font-size: 0.88rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 1.2rem;
+    }
+    .form-row {
+      display: flex;
+      gap: 1.5rem;
+      flex-wrap: wrap;
+      align-items: flex-end;
+      margin-bottom: 1rem;
+    }
+    .form-group {
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      flex: 1;
+      min-width: 150px;
+    }
+    label {
+      font-family: 'Cinzel', serif;
+      font-size: 0.67rem;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      color: var(--gold-dim);
+    }
+    input[type="text"], input[type="number"], select {
+      background: rgba(17,24,32,0.8);
+      border: 1px solid rgba(201,168,76,0.25);
+      color: var(--parchment);
+      font-family: 'Crimson Pro', Georgia, serif;
+      font-size: 1rem;
+      padding: 0.5rem 0.75rem;
+      width: 100%;
+      transition: border-color 0.2s;
+    }
+    input:focus, select:focus { outline: none; border-color: var(--gold); }
+    select option { background: var(--steel-dark); color: var(--parchment); }
+    input[type="range"] { width: 100%; accent-color: var(--gold); }
+    .range-val {
+      font-family: 'Cinzel Decorative', serif;
+      font-size: 1.3rem;
+      color: var(--gold);
+      display: inline-block;
+      min-width: 2ch;
+      text-align: center;
+    }
+    .sub-info {
+      font-size: 0.88rem;
+      color: rgba(242,232,213,0.55);
+      margin-top: 0.4rem;
+    }
+
+    /* ── Radio tabs ── */
+    .radio-tabs { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 1.2rem; }
+    .radio-tab {
+      font-family: 'Cinzel', serif;
+      font-size: 0.67rem;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.4rem 1rem;
+      border: 1px solid rgba(201,168,76,0.3);
+      color: var(--gold-dim);
+      cursor: pointer;
+      transition: all 0.2s;
+      background: transparent;
+    }
+    .radio-tab.sel { background: rgba(201,168,76,0.15); color: var(--gold); border-color: var(--gold); }
+
+    /* ── Stat grid ── */
+    .stat-grid {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 0.6rem;
+      margin: 0.75rem 0;
+    }
+    @media (max-width: 560px) { .stat-grid { grid-template-columns: repeat(3, 1fr); } }
+    .stat-cell {
+      background: rgba(17,24,32,0.8);
+      border: 1px solid rgba(201,168,76,0.2);
+      text-align: center;
+      padding: 0.55rem 0.3rem 0.45rem;
+    }
+    .stat-lbl {
+      display: block;
+      font-family: 'Cinzel', serif;
+      font-size: 0.62rem;
+      letter-spacing: 0.1em;
+      color: var(--gold-dim);
+      margin-bottom: 0.25rem;
+    }
+    .stat-num {
+      display: block;
+      font-family: 'Cinzel Decorative', serif;
+      font-size: 1.3rem;
+      color: var(--gold);
+    }
+    .stat-mod { font-family: 'Cinzel', serif; font-size: 0.68rem; color: rgba(242,232,213,0.55); }
+    .stat-sel {
+      width: 100%;
+      font-size: 0.82rem;
+      padding: 0.2rem 0.25rem;
+      text-align: center;
+    }
+    .stat-inp {
+      width: 100%;
+      text-align: center;
+      font-family: 'Cinzel Decorative', serif;
+      font-size: 1.1rem;
+      color: var(--gold);
+      background: transparent;
+      border: none;
+      border-bottom: 1px solid rgba(201,168,76,0.3);
+      padding: 0.15rem;
+    }
+    .stat-inp:focus { outline: none; border-bottom-color: var(--gold); }
+    .pb-ctrl { display: flex; align-items: center; justify-content: center; gap: 0.25rem; margin: 0.25rem 0; }
+    .pb-btn {
+      background: transparent;
+      border: 1px solid rgba(201,168,76,0.3);
+      color: var(--gold-dim);
+      cursor: pointer;
+      font-size: 0.9rem;
+      width: 22px; height: 22px;
+      display: inline-flex; align-items: center; justify-content: center;
+      transition: all 0.15s;
+    }
+    .pb-btn:hover:not(:disabled) { color: var(--gold); border-color: var(--gold); }
+    .pb-btn:disabled { opacity: 0.28; cursor: not-allowed; }
+    #pbPoints {
+      font-family: 'Cinzel', serif;
+      font-size: 0.72rem;
+      text-align: center;
+      margin-top: 0.4rem;
+      color: var(--gold-dim);
+    }
+    #pbPoints.warn { color: #c0392b; }
+    #pbPoints.ok   { color: #4caf50; }
+
+    /* ── Item lists ── */
+    .item-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 1.25rem; }
+    @media (max-width: 600px) { .item-cols { grid-template-columns: 1fr; } }
+    .item-scroll {
+      max-height: 280px;
+      overflow-y: auto;
+      border: 1px solid rgba(201,168,76,0.12);
+      scrollbar-width: thin;
+      scrollbar-color: var(--gold-dim) transparent;
+    }
+    .item-row {
+      display: flex;
+      align-items: center;
+      gap: 0.55rem;
+      padding: 0.4rem 0.7rem;
+      border-bottom: 1px solid rgba(201,168,76,0.05);
+      font-size: 0.88rem;
+      cursor: pointer;
+      transition: background 0.12s;
+    }
+    .item-row:hover { background: rgba(201,168,76,0.05); }
+    .item-row.in-inv { background: rgba(201,168,76,0.09); }
+    .item-row input[type="checkbox"] { accent-color: var(--gold); flex-shrink: 0; cursor: pointer; }
+    .item-meta { font-size: 0.75rem; color: rgba(242,232,213,0.45); margin-left: auto; white-space: nowrap; }
+    .eq-tag {
+      font-family: 'Cinzel', serif;
+      font-size: 0.58rem;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      padding: 0.08em 0.4em;
+      border: 1px solid rgba(201,168,76,0.35);
+      color: var(--gold-dim);
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .eq-tag.on { background: rgba(201,168,76,0.15); color: var(--gold); border-color: var(--gold); }
+
+    /* ── Monster rows ── */
+    .mon-row {
+      display: flex;
+      gap: 0.6rem;
+      align-items: center;
+      padding: 0.5rem 0;
+      border-bottom: 1px solid rgba(201,168,76,0.06);
+      flex-wrap: wrap;
+    }
+    .mon-row select { flex: 2; min-width: 110px; }
+    .mon-row input[type="number"] { flex: 1; min-width: 56px; }
+    .rm-btn {
+      background: transparent;
+      border: 1px solid rgba(139,26,26,0.45);
+      color: rgba(192,57,43,0.7);
+      cursor: pointer;
+      font-size: 0.9rem;
+      width: 26px; height: 26px;
+      display: flex; align-items: center; justify-content: center;
+      flex-shrink: 0;
+      transition: all 0.15s;
+    }
+    .rm-btn:hover { color: #c0392b; border-color: #c0392b; }
+    .add-btn {
+      font-family: 'Cinzel', serif;
+      font-size: 0.67rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      background: transparent;
+      border: 1px solid rgba(201,168,76,0.3);
+      color: var(--gold-dim);
+      padding: 0.45rem 1rem;
+      cursor: pointer;
+      margin-top: 0.6rem;
+      transition: all 0.2s;
+    }
+    .add-btn:hover { color: var(--gold); border-color: var(--gold); }
+
+    /* ── JSON preview / log ── */
+    .json-pre {
+      background: rgba(8,12,18,0.95);
+      border: 1px solid rgba(201,168,76,0.12);
+      border-left: 3px solid var(--gold-dim);
+      padding: 1rem 1.25rem;
+      max-height: 360px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 0.76rem;
+      line-height: 1.5;
+      color: rgba(242,232,213,0.78);
+      white-space: pre;
+      scrollbar-width: thin;
+      scrollbar-color: var(--gold-dim) transparent;
+    }
+    .combat-log {
+      background: rgba(8,12,18,0.95);
+      border: 1px solid rgba(201,168,76,0.1);
+      padding: 0.75rem 1rem;
+      max-height: 260px;
+      overflow-y: auto;
+      font-family: 'Courier New', monospace;
+      font-size: 0.73rem;
+      line-height: 1.4;
+      color: rgba(242,232,213,0.65);
+      white-space: pre-wrap;
+      margin-top: 0.75rem;
+      scrollbar-width: thin;
+      scrollbar-color: var(--gold-dim) transparent;
+    }
+
+    /* ── Result panel ── */
+    .res-panel {
+      background: rgba(17,24,32,0.8);
+      border: 1px solid rgba(201,168,76,0.15);
+      padding: 1.25rem;
+      margin-top: 1rem;
+      display: none;
+    }
+    .res-panel.on { display: block; }
+    .res-panel h4 {
+      font-family: 'Cinzel', serif;
+      font-size: 0.78rem;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      color: var(--gold);
+      margin-bottom: 0.75rem;
+    }
+    .res-stats { display: flex; gap: 2rem; flex-wrap: wrap; margin-bottom: 0.6rem; font-size: 0.93rem; }
+    .res-stats strong { font-family: 'Cinzel', serif; color: var(--gold); }
+    .warn-list { margin: 0.4rem 0; padding-left: 1.1rem; }
+    .warn-list li { font-size: 0.86rem; color: #d4a020; margin-bottom: 0.25rem; }
+
+    /* ── Buttons ── */
+    .step-nav {
+      display: flex;
+      justify-content: space-between;
+      margin-top: 2rem;
+      padding-top: 1.25rem;
+      border-top: 1px solid rgba(201,168,76,0.1);
+      position: relative; z-index: 1;
+    }
+    .btn {
+      font-family: 'Cinzel', serif;
+      font-size: 0.73rem;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+      padding: 0.7rem 1.7rem;
+      transition: all 0.22s;
+      cursor: pointer;
+      border: none;
+      display: inline-block;
+    }
+    .btn-primary   { background: var(--gold); color: var(--ink); border: 2px solid var(--gold); }
+    .btn-primary:hover { background: transparent; color: var(--gold); box-shadow: 0 0 28px var(--glow-hot); }
+    .btn-secondary { background: transparent; color: var(--gold-dim); border: 2px solid var(--gold-dim); }
+    .btn-secondary:hover { color: var(--gold); border-color: var(--gold); }
+    .btn:disabled { opacity: 0.38; cursor: not-allowed; }
+    .btn-row { display: flex; gap: 0.75rem; flex-wrap: wrap; margin-top: 0.75rem; }
+
+    /* ── Inline messages ── */
+    .imsg {
+      font-family: 'Cinzel', serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.08em;
+      padding: 0.45rem 0.7rem;
+      margin-top: 0.5rem;
+      display: none;
+    }
+    .imsg.on { display: block; }
+    .imsg.ok  { border-left: 3px solid #4caf50; color: #4caf50; }
+    .imsg.err { border-left: 3px solid #c0392b; color: #c0392b; }
+    .imsg.inf { border-left: 3px solid var(--gold-dim); color: var(--gold-dim); }
+
+    /* ── Spinner ── */
+    .spin {
+      display: inline-block;
+      width: 13px; height: 13px;
+      border: 2px solid rgba(201,168,76,0.3);
+      border-top-color: var(--gold);
+      border-radius: 50%;
+      animation: rot 0.6s linear infinite;
+      vertical-align: middle;
+      margin-right: 0.35rem;
+    }
+    @keyframes rot { to { transform: rotate(360deg); } }
+
+    /* ── Footer ── */
+    footer {
+      border-top: 1px solid rgba(201,168,76,0.15);
+      padding: 2rem;
+      text-align: center;
+      font-family: 'Cinzel', serif;
+      font-size: 0.7rem;
+      letter-spacing: 0.2em;
+      color: var(--gold-dim);
+      position: relative; z-index: 1;
+      margin-top: 4rem;
+    }
+    footer a { color: var(--gold-dim); text-decoration: none; }
+    footer a:hover { color: var(--gold); }
+  </style>
+</head>
+<body>
+
+  <header>
+    <div class="crest">⚔️</div>
+    <h1>Character Builder</h1>
+    <p class="subtitle">Forge your hero &amp; set the encounter</p>
+  </header>
+
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="simulator.html">Simulator</a>
+    <a href="builder.html" class="active">Builder</a>
+    <a href="scenarios.html">Scenarios</a>
+  </nav>
+
+  <div class="container">
+
+    <!-- API bar -->
+    <div class="api-bar">
+      <label for="apiUrl">API URL</label>
+      <input type="text" id="apiUrl" value="http://localhost:8000" />
+      <button class="btn btn-secondary" onclick="checkApi()" style="padding:0.32rem 0.9rem;font-size:0.68rem;">Connect</button>
+      <span id="apiStatus" class="loading">Not connected — run: uvicorn api:app</span>
+    </div>
+
+    <!-- Progress bar -->
+    <div class="wizard-progress">
+      <div class="prog-step active" data-step="1" onclick="jumpTo(1)"><span class="pnum">I</span>Character</div>
+      <div class="prog-step"        data-step="2" onclick="jumpTo(2)"><span class="pnum">II</span>Stats</div>
+      <div class="prog-step"        data-step="3" onclick="jumpTo(3)"><span class="pnum">III</span>Equipment</div>
+      <div class="prog-step"        data-step="4" onclick="jumpTo(4)"><span class="pnum">IV</span>Encounter</div>
+      <div class="prog-step"        data-step="5" onclick="jumpTo(5)"><span class="pnum">V</span>Review</div>
+    </div>
+
+    <!-- ═══ STEP 1 — Character ═══ -->
+    <div class="step-panel active" id="panel-1">
+      <div class="form-section">
+        <h3>Hero Identity</h3>
+        <div class="form-row">
+          <div class="form-group" style="flex:2">
+            <label for="charName">Character Name</label>
+            <input type="text" id="charName" value="Adventurer" />
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3>Class &amp; Level</h3>
+        <div class="form-row">
+          <div class="form-group" style="flex:2">
+            <label for="classSelect">Class</label>
+            <select id="classSelect" onchange="onClassChange()">
+              <option value="">— Loading… —</option>
+            </select>
+            <div class="sub-info" id="classInfo"></div>
+          </div>
+          <div class="form-group" style="flex:1;min-width:120px">
+            <label>Level &nbsp;<span class="range-val" id="lvlDisplay">5</span></label>
+            <input type="range" id="lvlSlider" min="1" max="20" value="5"
+                   oninput="document.getElementById('lvlDisplay').textContent=this.value;onLevelChange();" />
+          </div>
+        </div>
+        <div class="imsg" id="msg1"></div>
+      </div>
+
+      <div class="step-nav">
+        <div></div>
+        <button class="btn btn-primary" onclick="next(1)">Next: Stats →</button>
+      </div>
+    </div>
+
+    <!-- ═══ STEP 2 — Stats ═══ -->
+    <div class="step-panel" id="panel-2">
+
+      <div class="form-section" id="subSec" style="display:none">
+        <h3>Subclass</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="subSel">Choose Your Path</label>
+            <select id="subSel" onchange="onSubChange()">
+              <option value="">— None —</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section" id="choiceSec" style="display:none">
+        <h3>Feature Choices</h3>
+        <div id="choiceCont"></div>
+      </div>
+
+      <div class="form-section">
+        <h3>Ability Scores</h3>
+        <div class="radio-tabs">
+          <button class="radio-tab sel" onclick="setStatMode('sa', this)">Standard Array</button>
+          <button class="radio-tab"     onclick="setStatMode('pb', this)">Point Buy</button>
+          <button class="radio-tab"     onclick="setStatMode('mn', this)">Manual Entry</button>
+        </div>
+
+        <div id="saPanel">
+          <div class="sub-info" style="margin-bottom:0.6rem">
+            Assign 15, 14, 13, 12, 10, 8 — one value per ability score.
+          </div>
+          <div class="stat-grid" id="saGrid"></div>
+          <div class="sub-info" id="saLeft" style="margin-top:0.4rem"></div>
+        </div>
+
+        <div id="pbPanel" style="display:none">
+          <div class="sub-info" style="margin-bottom:0.6rem">
+            27 points total. Costs: 9=1, 10=2, 11=3, 12=4, 13=5, 14=7, 15=9.
+          </div>
+          <div class="stat-grid" id="pbGrid"></div>
+          <div id="pbPoints">Points remaining: 27</div>
+        </div>
+
+        <div id="mnPanel" style="display:none">
+          <div class="stat-grid" id="mnGrid"></div>
+        </div>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn btn-secondary" onclick="back(2)">← Back</button>
+        <button class="btn btn-primary"   onclick="next(2)">Next: Equipment →</button>
+      </div>
+    </div>
+
+    <!-- ═══ STEP 3 — Equipment ═══ -->
+    <div class="step-panel" id="panel-3">
+
+      <div class="form-section">
+        <h3>Weapons</h3>
+        <div class="sub-info" id="wpNote" style="margin-bottom:0.6rem">Loading…</div>
+        <div class="item-scroll" id="wpList"></div>
+      </div>
+
+      <div class="form-section">
+        <h3>Armor &amp; Shields</h3>
+        <div class="sub-info" id="arNote" style="margin-bottom:0.6rem">Loading…</div>
+        <div class="item-scroll" id="arList"></div>
+      </div>
+
+      <div class="form-section">
+        <h3>Trinkets &amp; Magic Items</h3>
+        <div class="sub-info" style="margin-bottom:0.6rem">Passive bonuses that stack with any class.</div>
+        <div class="item-scroll" id="trList"></div>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn btn-secondary" onclick="back(3)">← Back</button>
+        <button class="btn btn-primary"   onclick="next(3)">Next: Encounter →</button>
+      </div>
+    </div>
+
+    <!-- ═══ STEP 4 — Encounter ═══ -->
+    <div class="step-panel" id="panel-4">
+
+      <div class="form-section">
+        <h3>Scenario</h3>
+        <div class="form-row">
+          <div class="form-group" style="flex:2">
+            <label for="scenName">Scenario Name</label>
+            <input type="text" id="scenName" placeholder="my_adventure" />
+          </div>
+          <div class="form-group">
+            <label for="maxRounds">Max Rounds</label>
+            <input type="number" id="maxRounds" value="30" min="5" max="200" />
+          </div>
+        </div>
+      </div>
+
+      <div class="form-section">
+        <h3>Battle Map</h3>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="mapW">Width (squares)</label>
+            <input type="number" id="mapW" value="20" min="8" max="60" />
+          </div>
+          <div class="form-group">
+            <label for="mapH">Height (squares)</label>
+            <input type="number" id="mapH" value="16" min="8" max="60" />
+          </div>
+        </div>
+        <div class="sub-info">5 ft. per square — creatures are auto-placed.</div>
+      </div>
+
+      <div class="form-section">
+        <h3>Monster Groups</h3>
+        <div id="monList"></div>
+        <button class="add-btn" onclick="addMonster()">+ Add Monster Group</button>
+        <div class="imsg" id="msg4"></div>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn btn-secondary" onclick="back(4)">← Back</button>
+        <button class="btn btn-primary"   onclick="next(4)">Next: Review →</button>
+      </div>
+    </div>
+
+    <!-- ═══ STEP 5 — Review ═══ -->
+    <div class="step-panel" id="panel-5">
+
+      <div class="form-section">
+        <h3>Scenario JSON</h3>
+        <pre class="json-pre" id="jsonPre"></pre>
+      </div>
+
+      <div class="form-section">
+        <h3>Validate Character</h3>
+        <div class="sub-info" style="margin-bottom:0.75rem">
+          Dry-runs your character through the engine to check for errors before saving.
+        </div>
+        <button class="btn btn-secondary" id="valBtn" onclick="validateChar()">Validate Character</button>
+        <div class="res-panel" id="valResult"></div>
+      </div>
+
+      <div class="form-section">
+        <h3>Save &amp; Run</h3>
+        <div class="form-row">
+          <div class="form-group" style="flex:2">
+            <label for="saveFile">Save As (.json)</label>
+            <input type="text" id="saveFile" placeholder="my_scenario.json" />
+          </div>
+          <div class="form-group" style="justify-content:flex-end;padding-bottom:0.1rem">
+            <label style="display:flex;align-items:center;gap:0.4rem;cursor:pointer">
+              <input type="checkbox" id="overwrite" style="width:auto;accent-color:var(--gold)" />
+              Overwrite existing
+            </label>
+          </div>
+        </div>
+        <div class="btn-row">
+          <button class="btn btn-primary"   id="saveBtn" onclick="saveScenario()">Save Scenario</button>
+          <button class="btn btn-secondary" id="runBtn"  onclick="runSim()">Run Simulation</button>
+        </div>
+        <div class="imsg" id="msg5"></div>
+      </div>
+
+      <div class="res-panel" id="simPanel">
+        <h4>Simulation Result</h4>
+        <div class="res-stats" id="simStats"></div>
+        <div class="combat-log" id="combatLog"></div>
+      </div>
+
+      <div class="step-nav">
+        <button class="btn btn-secondary" onclick="back(5)">← Back</button>
+        <div></div>
+      </div>
+    </div>
+
+  </div><!-- /container -->
+
+  <footer>
+    <p>DnDPython &nbsp;·&nbsp; <a href="https://github.com/b-usrey/DnDPython">GitHub</a> &nbsp;·&nbsp; Not affiliated with Wizards of the Coast</p>
+  </footer>
+
+  <script>
+  // ── State ──────────────────────────────────────────────────────────
+  let curStep   = 1;
+  let classes   = [];   // from GET /classes
+  let clsDetail = null; // from GET /classes/{name}
+  let items     = { weapons: [], armor: [], trinkets: [] };
+  let monsters  = [];   // from GET /monsters
+  let monId     = 0;
+
+  const STATS = ['Str','Dex','Con','Int','Wis','Cha'];
+  const SA    = [15,14,13,12,10,8];
+  const PB_COST = {8:0,9:1,10:2,11:3,12:4,13:5,14:7,15:9};
+
+  let statMode = 'sa';
+  let saVals   = {};  // stat → number
+  let pbVals   = {};  // stat → number (starts at 8)
+  let mnVals   = {};  // stat → number
+
+  let invSet = new Set();  // item names in inventory
+  let eqSet  = new Set();  // item names equipped
+
+  // Simple/martial sets for proficiency filtering (mirrors character_builder.py)
+  const SIMPLE_SET = new Set([
+    'Dagger','Dagger+1','Handaxe','Javelin','Light Crossbow',
+    'Mace','Quarterstaff','Shortbow','Spear',
+  ]);
+  const MARTIAL_SET = new Set([
+    'Longsword','Longsword+1','Longsword+2',
+    'Shortsword','Shortsword+1',
+    'Rapier','Rapier+1','Rapier+2',
+    'Greatsword','Greatsword+1','Greatsword+2',
+    'Greataxe','Greataxe+1','Greataxe+2',
+    'Battleaxe','Warhammer','Warhammer+1','Maul','Flail','Morningstar',
+    'Longbow','Longbow+1','Longbow+2','Hand Crossbow',
+  ]);
+
+  // ── API helpers ────────────────────────────────────────────────────
+  function apiBase() {
+    return (document.getElementById('apiUrl').value || 'http://localhost:8000').replace(/\/$/, '');
+  }
+
+  async function apiFetch(path, opts = {}) {
+    const res = await fetch(apiBase() + path, opts);
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({ detail: res.statusText }));
+      throw new Error(e.detail || res.statusText);
+    }
+    return res.json();
+  }
+
+  async function checkApi() {
+    const el = document.getElementById('apiStatus');
+    el.textContent = '⟳ Connecting…';
+    el.className = 'loading';
+    try {
+      await apiFetch('/');
+      el.textContent = '✦ Connected';
+      el.className = 'ok';
+      await loadData();
+    } catch (e) {
+      el.textContent = '✗ ' + e.message;
+      el.className = 'err';
+    }
+  }
+
+  async function loadData() {
+    const [c, it, m] = await Promise.all([
+      apiFetch('/classes'),
+      apiFetch('/items'),
+      apiFetch('/monsters'),
+    ]);
+    classes  = c.classes;
+    items    = it;
+    monsters = m.monsters;
+    populateClasses();
+    renderItems();
+    if (!document.querySelector('.mon-row')) addMonster();
+  }
+
+  // ── Step 1 helpers ─────────────────────────────────────────────────
+  function populateClasses() {
+    const sel = document.getElementById('classSelect');
+    sel.innerHTML = '<option value="">— Select a class —</option>';
+    classes.forEach(c => {
+      const o = document.createElement('option');
+      o.value = c.name; o.textContent = c.name;
+      sel.appendChild(o);
+    });
+  }
+
+  async function onClassChange() {
+    const name = document.getElementById('classSelect').value;
+    clsDetail = null;
+    document.getElementById('classInfo').textContent = '';
+    if (!name) return;
+    try {
+      clsDetail = await apiFetch('/classes/' + encodeURIComponent(name.toLowerCase()));
+    } catch (e) {
+      clsDetail = classes.find(c => c.name === name) || null;
+    }
+    if (clsDetail) {
+      const d = clsDetail;
+      document.getElementById('classInfo').textContent =
+        `d${d.hit_die} hit die  ·  saves: ${(d.saving_throws||[]).join(' & ')}  ·  weapons: ${(d.weapon_proficiencies||[]).join(', ')}`;
+    }
+    // Auto-suggest filename
+    const n = (document.getElementById('charName').value.trim() || 'adventurer').toLowerCase().replace(/\s+/g,'_');
+    document.getElementById('scenName').value  = n + '_vs_monsters';
+    document.getElementById('saveFile').value  = n + '_vs_monsters.json';
+    refreshEqLists();
+  }
+
+  function onLevelChange() {
+    buildSubSec();
+    buildChoiceSec();
+  }
+
+  function getLevel() { return parseInt(document.getElementById('lvlSlider').value, 10) || 1; }
+
+  function subclassUnlockLevel() {
+    if (!clsDetail) return 99;
+    const kw = ['path','archetype','oath','patron','college','circle','tradition'];
+    for (const [lv, feats] of Object.entries(clsDetail.features_by_level || {})) {
+      for (const f of feats) {
+        if (f.options && kw.some(k => (f.name||'').toLowerCase().includes(k)))
+          return parseInt(lv, 10);
+      }
+    }
+    const subs = clsDetail.subclasses || {};
+    let min = 99;
+    Object.values(subs).forEach(s => {
+      Object.keys(s.features_by_level || {}).forEach(l => { min = Math.min(min, parseInt(l,10)); });
+    });
+    return min < 99 ? min : 3;
+  }
+
+  function isSubChoice(feat) {
+    const kw = ['path','archetype','oath','patron','college','circle','tradition'];
+    return feat.options && kw.some(k => (feat.name||'').toLowerCase().includes(k));
+  }
+
+  function buildSubSec() {
+    const sec = document.getElementById('subSec');
+    const sel = document.getElementById('subSel');
+    if (!clsDetail || !clsDetail.subclasses || !Object.keys(clsDetail.subclasses).length) {
+      sec.style.display = 'none'; return;
+    }
+    if (getLevel() < subclassUnlockLevel()) { sec.style.display = 'none'; return; }
+    sec.style.display = 'block';
+    const prev = sel.value;
+    sel.innerHTML = '<option value="">— None —</option>';
+    Object.keys(clsDetail.subclasses).forEach(key => {
+      const o = document.createElement('option');
+      o.value = key;
+      o.textContent = key.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase());
+      sel.appendChild(o);
+    });
+    if (prev) sel.value = prev;
+  }
+
+  function onSubChange() { buildChoiceSec(); }
+
+  function buildChoiceSec() {
+    const sec  = document.getElementById('choiceSec');
+    const cont = document.getElementById('choiceCont');
+    if (!clsDetail) { sec.style.display = 'none'; return; }
+
+    const lv    = getLevel();
+    const cls   = clsDetail.class_name;
+    const subK  = document.getElementById('subSel').value;
+    const rows  = [];
+
+    // Main class choices (skip subclass-picker choices)
+    for (let l = 1; l <= lv; l++) {
+      for (const f of (clsDetail.features_by_level || {})[String(l)] || []) {
+        if (f.options && !isSubChoice(f)) rows.push({ owner: cls, lv: l, feat: f });
+      }
+    }
+    // Subclass choices
+    if (subK && clsDetail.subclasses && clsDetail.subclasses[subK]) {
+      const sfbl = clsDetail.subclasses[subK].features_by_level || {};
+      for (let l = 1; l <= lv; l++) {
+        for (const f of (sfbl[String(l)] || [])) {
+          if (f.options) rows.push({ owner: subK, lv: l, feat: f });
+        }
+      }
+    }
+
+    if (!rows.length) { sec.style.display = 'none'; return; }
+    sec.style.display = 'block';
+    cont.innerHTML = '';
+    rows.forEach(({ owner, lv: l, feat }) => {
+      const id = `ch_${owner}_${l}_${feat.name}`.replace(/\W/g,'_');
+      const g  = document.createElement('div');
+      g.className = 'form-row';
+      g.innerHTML = `<div class="form-group">
+        <label for="${id}">Lv${l} — ${feat.name}</label>
+        <select id="${id}" data-owner="${owner}" data-lv="${l}" data-feat="${feat.name}">
+          ${feat.options.map(o=>`<option value="${o}">${o}</option>`).join('')}
+        </select>
+      </div>`;
+      cont.appendChild(g);
+    });
+  }
+
+  // ── Step 2 — Stat assignment ──────────────────────────────────────
+  function setStatMode(mode, btn) {
+    statMode = mode;
+    document.querySelectorAll('.radio-tab').forEach(b => b.classList.remove('sel'));
+    btn.classList.add('sel');
+    document.getElementById('saPanel').style.display = mode === 'sa' ? '' : 'none';
+    document.getElementById('pbPanel').style.display = mode === 'pb' ? '' : 'none';
+    document.getElementById('mnPanel').style.display = mode === 'mn' ? '' : 'none';
+  }
+
+  function mod(v) { const m = Math.floor((v-10)/2); return (m>=0?'+':'')+m; }
+
+  // Standard array
+  function buildSaGrid() {
+    const g = document.getElementById('saGrid');
+    g.innerHTML = '';
+    const used = Object.values(saVals).filter(Boolean);
+    STATS.forEach(s => {
+      const cur = saVals[s] || '';
+      const cell = document.createElement('div');
+      cell.className = 'stat-cell';
+      const opts = SA.sort((a,b)=>b-a).map(v => {
+        const dis = used.includes(v) && v !== cur ? 'disabled' : '';
+        const sel = v === cur ? 'selected' : '';
+        return `<option value="${v}" ${sel} ${dis}>${v}</option>`;
+      }).join('');
+      cell.innerHTML = `<span class="stat-lbl">${s}</span>
+        <select class="stat-sel" onchange="onSaChange('${s}',this.value)">
+          <option value="">—</option>${opts}
+        </select>
+        <span class="stat-mod">${cur ? mod(cur) : ''}</span>`;
+      g.appendChild(cell);
+    });
+    const left = SA.filter(v => !used.includes(v));
+    document.getElementById('saLeft').textContent =
+      left.length ? 'Remaining: ' + left.sort((a,b)=>b-a).join(', ') : '✦ All values assigned.';
+  }
+
+  function onSaChange(stat, val) {
+    if (val) saVals[stat] = parseInt(val, 10); else delete saVals[stat];
+    buildSaGrid();
+  }
+
+  // Point buy
+  function pbLeft() { return 27 - Object.values(pbVals).reduce((a,v) => a+(PB_COST[v]||0), 0); }
+
+  function buildPbGrid() {
+    if (!Object.keys(pbVals).length) STATS.forEach(s => pbVals[s] = 8);
+    const g = document.getElementById('pbGrid');
+    g.innerHTML = '';
+    const left = pbLeft();
+    STATS.forEach(s => {
+      const v = pbVals[s];
+      const cell = document.createElement('div');
+      cell.className = 'stat-cell';
+      const canUp = v < 15 && left > 0;
+      cell.innerHTML = `<span class="stat-lbl">${s}</span>
+        <div class="pb-ctrl">
+          <button class="pb-btn" onclick="pbAdj('${s}',-1)" ${v<=8?'disabled':''}>−</button>
+          <span class="stat-num">${v}</span>
+          <button class="pb-btn" onclick="pbAdj('${s}',1)"  ${!canUp?'disabled':''}>+</button>
+        </div>
+        <span class="stat-mod">${mod(v)}</span>`;
+      g.appendChild(cell);
+    });
+    const el = document.getElementById('pbPoints');
+    el.textContent = 'Points remaining: ' + left;
+    el.className = left === 0 ? 'ok' : left < 0 ? 'warn' : '';
+  }
+
+  function pbAdj(stat, d) {
+    const nv = pbVals[stat] + d;
+    if (nv < 8 || nv > 15) return;
+    const spent = STATS.reduce((a,s) => a + (s!==stat ? (PB_COST[pbVals[s]]||0) : 0), 0);
+    if (spent + (PB_COST[nv]||0) > 27) return;
+    pbVals[stat] = nv;
+    buildPbGrid();
+  }
+
+  // Manual
+  function buildMnGrid() {
+    if (!Object.keys(mnVals).length) STATS.forEach(s => mnVals[s] = 10);
+    const g = document.getElementById('mnGrid');
+    g.innerHTML = '';
+    STATS.forEach(s => {
+      const v = mnVals[s];
+      const cell = document.createElement('div');
+      cell.className = 'stat-cell';
+      cell.innerHTML = `<span class="stat-lbl">${s}</span>
+        <input class="stat-inp" type="number" min="1" max="30" value="${v}" id="mn_${s}"
+               oninput="mnVals['${s}']=parseInt(this.value)||10" />
+        <span class="stat-mod">${mod(v)}</span>`;
+      g.appendChild(cell);
+    });
+  }
+
+  function getStats() {
+    if (statMode === 'sa') {
+      const r = {}; STATS.forEach(s => r[s] = saVals[s] || 10); return r;
+    } else if (statMode === 'pb') {
+      return { ...pbVals };
+    } else {
+      const r = {};
+      STATS.forEach(s => {
+        const el = document.getElementById('mn_' + s);
+        r[s] = el ? (parseInt(el.value,10)||10) : (mnVals[s]||10);
+      });
+      return r;
+    }
+  }
+
+  // ── Step 3 — Equipment ─────────────────────────────────────────────
+  function wProfs() { return clsDetail ? (clsDetail.weapon_proficiencies || []) : []; }
+  function aProfs() { return clsDetail ? (clsDetail.armor_proficiencies  || []) : []; }
+
+  function canUseWeapon(w) {
+    const p = wProfs();
+    if (p.includes('all')) return true;
+    if (p.includes('simple')  && SIMPLE_SET.has(w.name))  return true;
+    if (p.includes('martial') && MARTIAL_SET.has(w.name)) return true;
+    return false;
+  }
+
+  function canUseArmor(a) {
+    const p = aProfs();
+    if (p.includes('all')) return true;
+    const t = (a.armor_type || '').toLowerCase();
+    if (p.includes('shields') && t === 'shield') return true;
+    return p.includes(t);
+  }
+
+  function renderItems() {
+    refreshEqLists();
+    renderTrinkets();
+  }
+
+  function refreshEqLists() {
+    const wp = clsDetail ? items.weapons.filter(w => canUseWeapon(w)) : items.weapons;
+    const ap = clsDetail ? items.armor.filter(a => canUseArmor(a))   : items.armor;
+    document.getElementById('wpNote').textContent =
+      `Showing weapons proficient for ${clsDetail ? clsDetail.class_name : 'this class'} (${wProfs().join(', ') || 'none'}).`;
+    document.getElementById('arNote').textContent =
+      `Showing armor usable by ${clsDetail ? clsDetail.class_name : 'this class'} (${aProfs().join(', ') || 'none'}).`;
+    renderList('wpList', wp, w => `${w.damage_die||''} ${w.damage_type||''} · ${w.attack_type||''}`);
+    renderList('arList', ap, a => `AC ${a.base_ac}${a.magic_bonus?(' +'+a.magic_bonus):''} · ${a.armor_type||''}`);
+  }
+
+  function renderTrinkets() {
+    renderList('trList', items.trinkets, t => t.description || '');
+  }
+
+  function renderList(elId, arr, metaFn) {
+    const list = document.getElementById(elId);
+    list.innerHTML = '';
+    if (!arr.length) {
+      list.innerHTML = '<div class="item-row" style="color:rgba(242,232,213,0.35)">None available</div>';
+      return;
+    }
+    arr.forEach(item => list.appendChild(makeRow(item.name, metaFn(item))));
+  }
+
+  function makeRow(name, meta) {
+    const row = document.createElement('div');
+    row.className = 'item-row' + (invSet.has(name) ? ' in-inv' : '');
+    row.dataset.item = name;
+    const safe = name.replace(/['"]/g, '\\$&');
+    row.innerHTML = `
+      <input type="checkbox" ${invSet.has(name)?'checked':''} onchange="toggleInv('${safe}',this.checked)" />
+      <span style="flex:1;cursor:pointer" onclick="toggleInv('${safe}',!invSet.has('${safe}'))">${name}</span>
+      <span class="item-meta">${meta}</span>
+      <span class="eq-tag ${eqSet.has(name)?'on':''}" onclick="toggleEq('${safe}',event)" title="Toggle equipped">Equip</span>`;
+    return row;
+  }
+
+  function toggleInv(name, on) {
+    if (on) { invSet.add(name); } else { invSet.delete(name); eqSet.delete(name); }
+    refreshRows();
+  }
+
+  function toggleEq(name, ev) {
+    ev.stopPropagation();
+    if (!invSet.has(name)) invSet.add(name);
+    if (eqSet.has(name)) eqSet.delete(name); else eqSet.add(name);
+    refreshRows();
+  }
+
+  function refreshRows() {
+    document.querySelectorAll('.item-row[data-item]').forEach(row => {
+      const n = row.dataset.item;
+      row.classList.toggle('in-inv', invSet.has(n));
+      const cb = row.querySelector('input[type="checkbox"]');
+      if (cb) cb.checked = invSet.has(n);
+      const tag = row.querySelector('.eq-tag');
+      if (tag) tag.classList.toggle('on', eqSet.has(n));
+    });
+  }
+
+  // ── Step 4 — Encounter ─────────────────────────────────────────────
+  function addMonster() {
+    const id  = ++monId;
+    const row = document.createElement('div');
+    row.className = 'mon-row';
+    row.id = 'mon_' + id;
+    const opts = monsters.length
+      ? monsters.map(m => `<option value="${m}">${m}</option>`).join('')
+      : '<option value="GOBLIN">GOBLIN</option><option value="ORC">ORC</option>';
+    row.innerHTML = `
+      <select id="mtype_${id}">${opts}</select>
+      <input type="number" id="mcnt_${id}" value="2" min="1" max="20" title="Count" />
+      <select id="mrole_${id}">
+        <option value="random">Random role</option>
+        <option value="melee">Melee</option>
+        <option value="ranged">Ranged</option>
+        <option value="all">All attacks</option>
+      </select>
+      <button class="rm-btn" onclick="document.getElementById('mon_${id}').remove()" title="Remove">✕</button>`;
+    document.getElementById('monList').appendChild(row);
+  }
+
+  function getMonsters() {
+    return Array.from(document.querySelectorAll('.mon-row')).map(row => {
+      const id = row.id.replace('mon_','');
+      return {
+        type: document.getElementById('mtype_'+id)?.value || 'GOBLIN',
+        count: parseInt(document.getElementById('mcnt_'+id)?.value,10) || 1,
+        weapon_role: document.getElementById('mrole_'+id)?.value || 'random',
+      };
+    }).filter(m => m.type);
+  }
+
+  // ── Build payload ──────────────────────────────────────────────────
+  function getChoices() {
+    return Array.from(document.querySelectorAll('#choiceCont select')).map(sel => [
+      sel.dataset.owner,
+      parseInt(sel.dataset.lv, 10),
+      sel.dataset.feat,
+      sel.value,
+    ]).filter(c => c[3]);
+  }
+
+  function buildPlayer() {
+    const name   = document.getElementById('charName').value.trim() || 'Adventurer';
+    const cls    = document.getElementById('classSelect').value;
+    const lv     = getLevel();
+    const subKey = document.getElementById('subSel')?.value || '';
+    const player = {
+      name,
+      classes:  [[cls, lv]],
+      stats:    getStats(),
+      items:    [...invSet],
+      equipped: [...eqSet],
+      choices:  getChoices(),
+      features: [],
+    };
+    if (subKey) player.subclasses = { [cls]: subKey };
+    return player;
+  }
+
+  function buildScenario() {
+    const name  = document.getElementById('scenName').value.trim() || 'custom_scenario';
+    const maxR  = parseInt(document.getElementById('maxRounds').value,10) || 30;
+    const mapW  = parseInt(document.getElementById('mapW').value,10) || 20;
+    const mapH  = parseInt(document.getElementById('mapH').value,10) || 16;
+    return {
+      name,
+      max_rounds: maxR,
+      map: { width: mapW, height: mapH, walls: [], difficult_terrain: [] },
+      positions: {},
+      players:  [buildPlayer()],
+      monsters: getMonsters(),
+      rewards:  { damage_scale: 0.02 },
+    };
+  }
+
+  // ── Navigation ─────────────────────────────────────────────────────
+  function jumpTo(n) {
+    document.getElementById('panel-' + curStep)?.classList.remove('active');
+    document.querySelectorAll('.prog-step').forEach(el => {
+      const s = parseInt(el.dataset.step, 10);
+      el.classList.remove('active','done');
+      if (s < n) el.classList.add('done');
+    });
+    curStep = n;
+    document.getElementById('panel-' + n)?.classList.add('active');
+    document.querySelector(`.prog-step[data-step="${n}"]`)?.classList.add('active');
+    onEnter(n);
+  }
+
+  function next(from) { if (checkStep(from)) { jumpTo(from+1); scrollTo({top:0,behavior:'smooth'}); } }
+  function back(from) { jumpTo(from-1); scrollTo({top:0,behavior:'smooth'}); }
+
+  function checkStep(n) {
+    if (n === 1) {
+      if (!document.getElementById('charName').value.trim()) { showMsg('msg1','Enter a name.','err'); return false; }
+      if (!document.getElementById('classSelect').value)    { showMsg('msg1','Select a class.','err'); return false; }
+      hideMsg('msg1'); return true;
+    }
+    if (n === 4) {
+      if (!getMonsters().length) { showMsg('msg4','Add at least one monster group.','err'); return false; }
+      hideMsg('msg4'); return true;
+    }
+    return true;
+  }
+
+  function onEnter(n) {
+    if (n === 2) {
+      buildSubSec(); buildChoiceSec();
+      buildSaGrid(); buildPbGrid(); buildMnGrid();
+    }
+    if (n === 3) refreshEqLists();
+    if (n === 5) {
+      const sc = buildScenario();
+      document.getElementById('jsonPre').textContent = JSON.stringify(sc, null, 2);
+      document.getElementById('saveFile').value =
+        (sc.name || 'scenario').replace(/\s+/g,'_') + '.json';
+    }
+  }
+
+  // ── Actions (Step 5) ───────────────────────────────────────────────
+  async function validateChar() {
+    const btn = document.getElementById('valBtn');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spin"></span>Validating…';
+    const panel = document.getElementById('valResult');
+    panel.className = 'res-panel';
+    try {
+      const res = await apiFetch('/validate-character', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ player: buildPlayer() }),
+      });
+      panel.className = 'res-panel on';
+      const warns = (res.warnings||[]).length
+        ? `<ul class="warn-list">${res.warnings.map(w=>`<li>${w}</li>`).join('')}</ul>`
+        : '<p style="color:#4caf50;font-size:0.9rem">✦ Character looks good!</p>';
+      panel.innerHTML = `<h4>Validation</h4>
+        <div class="res-stats">
+          <span><strong>HP</strong> ${res.hp}</span>
+          <span><strong>AC</strong> ${res.ac}</span>
+          <span><strong>Features</strong> ${(res.features||[]).join(', ')||'—'}</span>
+        </div>${warns}`;
+    } catch (e) {
+      panel.className = 'res-panel on';
+      panel.innerHTML = `<h4>Validation Failed</h4><p style="color:#c0392b;font-size:0.9rem">${e.message}</p>`;
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Validate Character';
+    }
+  }
+
+  async function saveScenario() {
+    const sc   = buildScenario();
+    const file = document.getElementById('saveFile').value.trim() || 'custom_scenario.json';
+    const over = document.getElementById('overwrite').checked;
+    showMsg('msg5','⟳ Saving…','inf');
+    try {
+      const res = await apiFetch('/scenarios', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenario: sc, filename: file, overwrite: over }),
+      });
+      showMsg('msg5', `✦ Saved as ${res.filename}`, 'ok');
+    } catch (e) { showMsg('msg5', '✗ ' + e.message, 'err'); }
+  }
+
+  async function runSim() {
+    const sc = buildScenario();
+    showMsg('msg5','⟳ Running simulation…','inf');
+    document.getElementById('simPanel').style.display = 'none';
+    try {
+      const res = await apiFetch('/simulate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ scenario: sc, episodes: 1, silent: false }),
+      });
+      hideMsg('msg5');
+      const out  = res.sample_outcome || '';
+      const win  = out.toLowerCase().includes('blue') ? '🔵 Players Win'
+                 : out.toLowerCase().includes('red')  ? '🔴 Monsters Win' : '⏱ Draw';
+      const alive = (res.creatures||[]).filter(c=>c.alive).map(c=>c.name).join(', ') || 'None';
+      document.getElementById('simStats').innerHTML = `
+        <span><strong>Outcome</strong> ${win}</span>
+        <span><strong>Rounds</strong> ${Math.round(res.avg_rounds)}</span>
+        <span><strong>Survivors</strong> ${alive}</span>`;
+      document.getElementById('combatLog').textContent = res.log || '(no output)';
+      const panel = document.getElementById('simPanel');
+      panel.style.display = '';
+      panel.className = 'res-panel on';
+      panel.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    } catch (e) { showMsg('msg5', '✗ ' + e.message, 'err'); }
+  }
+
+  // ── Utility ────────────────────────────────────────────────────────
+  function showMsg(id, txt, type) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.textContent = txt;
+    el.className = 'imsg on ' + type;
+  }
+  function hideMsg(id) {
+    const el = document.getElementById(id);
+    if (el) el.className = 'imsg';
+  }
+
+  // ── Init ───────────────────────────────────────────────────────────
+  window.addEventListener('DOMContentLoaded', () => {
+    buildSaGrid(); buildPbGrid(); buildMnGrid();
+    checkApi();
+  });
+  </script>
+</body>
+</html>
