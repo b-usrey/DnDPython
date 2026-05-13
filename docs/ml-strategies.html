@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ML Strategies — DnDPython</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root { --ink: #0d0b0e; --parchment: #f2e8d5; --gold: #c9a84c; --gold-dim: #7a5f28; --steel-dark: #111820; --glow-hot: rgba(201,168,76,0.45); }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--steel-dark); color: var(--parchment); font-family: 'Crimson Pro', Georgia, serif; font-size: 18px; line-height: 1.7; min-height: 100vh; }
+    body::before { content: ''; position: fixed; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"); background-size: 200px; pointer-events: none; z-index: 0; opacity: 0.5; }
+    .page { max-width: 860px; margin: 0 auto; padding: 2rem; position: relative; z-index: 1; }
+    .page-header { display: flex; align-items: center; gap: 2rem; padding: 2rem 0 1.5rem; border-bottom: 1px solid rgba(201,168,76,0.2); margin-bottom: 2.5rem; }
+    .back-link { font-family: 'Cinzel', serif; font-size: 0.75rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold-dim); text-decoration: none; white-space: nowrap; flex-shrink: 0; }
+    .back-link:hover { color: var(--gold); }
+    .page-title { font-family: 'Cinzel Decorative', serif; font-size: clamp(1.4rem, 4vw, 2.2rem); color: var(--gold); text-shadow: 0 0 30px var(--glow-hot); }
+    .page-subtitle { font-family: 'Cinzel', serif; font-size: 0.8rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold-dim); margin-top: 0.3rem; }
+    p { color: rgba(242,232,213,0.82); margin-bottom: 1rem; font-size: 0.97rem; }
+
+    .method-block { background: linear-gradient(160deg, rgba(30,42,56,0.5), rgba(17,24,32,0.7)); border: 1px solid rgba(201,168,76,0.2); border-top: 3px solid var(--gold-dim); padding: 1.5rem; margin-bottom: 1.75rem; }
+    .method-block h2 { font-family: 'Cinzel', serif; font-size: 1rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); margin-bottom: 0.25rem; }
+    .method-tag { font-family: 'Cinzel', serif; font-size: 0.68rem; letter-spacing: 0.12em; text-transform: uppercase; color: var(--gold-dim); margin-bottom: 0.85rem; display: block; }
+
+    .spec-row { display: flex; gap: 1.5rem; flex-wrap: wrap; margin: 0.75rem 0; }
+    .spec { font-size: 0.85rem; }
+    .spec b { font-family: 'Cinzel', serif; font-size: 0.65rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold-dim); display: block; }
+    .spec span { color: rgba(242,232,213,0.8); }
+
+    .callout { background: rgba(201,168,76,0.06); border: 1px solid rgba(201,168,76,0.15); border-left: 3px solid var(--gold-dim); padding: 0.85rem 1.1rem; font-size: 0.88rem; color: rgba(242,232,213,0.65); margin-top: 0.75rem; }
+
+    .intro-p { font-size: 1rem; color: rgba(242,232,213,0.8); margin-bottom: 2rem; padding-bottom: 1.5rem; border-bottom: 1px solid rgba(201,168,76,0.15); }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <a class="back-link" href="index.html">← Home</a>
+      <div>
+        <h1 class="page-title">🤖 ML Strategies</h1>
+        <p class="page-subtitle">Trained Combat Intelligence</p>
+      </div>
+    </header>
+
+    <p class="intro-p">Instead of handcrafted rules, ML strategies learn which of the five tactical behaviours (Aggressive, Kite, Retreat, Focus Fire, Protect) to use each turn by training over thousands of simulated combats. Three different learning algorithms are implemented, each with different trade-offs between sample efficiency, training time, and final performance.</p>
+
+    <div class="method-block">
+      <h2>Q-Table Reinforcement Learning</h2>
+      <span class="method-tag">File format: .npy &nbsp;·&nbsp; Model type: rl</span>
+      <p>A classic tabular Q-learning approach. The 12-dimensional observation vector is discretised into a finite number of state buckets, and a Q-value is stored for each (state, strategy) pair. After every episode, values are updated using TD(0).</p>
+      <div class="spec-row">
+        <div class="spec"><b>State space</b><span>3⁹ = 19,683 states</span></div>
+        <div class="spec"><b>Learning rate</b><span>α = 0.20</span></div>
+        <div class="spec"><b>Discount</b><span>γ = 0.95</span></div>
+        <div class="spec"><b>Exploration</b><span>ε-greedy, decaying</span></div>
+      </div>
+      <div class="callout">Best for: fast experimentation. Converges quickly on simple scenarios but struggles when the state space is complex.</div>
+    </div>
+
+    <div class="method-block">
+      <h2>Evolutionary Strategy</h2>
+      <span class="method-tag">File format: .npy &nbsp;·&nbsp; Model type: evo</span>
+      <p>A population of weight matrices (W of shape 12 × 5) compete across combat episodes. Each turn, the strategy is chosen as argmax(W @ obs). After each generation, the top performers survive and mutate, gradually pushing the population toward higher win rates.</p>
+      <div class="spec-row">
+        <div class="spec"><b>Population</b><span>20 individuals</span></div>
+        <div class="spec"><b>Elite fraction</b><span>20% kept per generation</span></div>
+        <div class="spec"><b>Mutation</b><span>Gaussian noise std 0.1</span></div>
+        <div class="spec"><b>Crossover</b><span>Uniform, p = 0.5</span></div>
+      </div>
+      <div class="callout">Best for: parallelised training across many scenarios. Slower convergence than RL but more robust to reward noise.</div>
+    </div>
+
+    <div class="method-block">
+      <h2>Deep Q-Network (DQN)</h2>
+      <span class="method-tag">File format: .pt &nbsp;·&nbsp; Model type: dqn</span>
+      <p>A small PyTorch MLP (12 → 64 → 32 → 5) learns to map the raw observation vector directly to Q-values for each strategy. Experience replay and a separate target network stabilise training. Epsilon decays from 1.0 to 0.05 over the course of training.</p>
+      <div class="spec-row">
+        <div class="spec"><b>Architecture</b><span>12 → 64 → 32 → 5</span></div>
+        <div class="spec"><b>Replay buffer</b><span>10,000 transitions</span></div>
+        <div class="spec"><b>Batch size</b><span>64</span></div>
+        <div class="spec"><b>Target update</b><span>Every 100 episodes</span></div>
+      </div>
+      <div class="callout">Best for: highest ceiling performance. Requires more episodes to converge but can learn nuanced multi-step strategies the table-based methods miss.</div>
+    </div>
+
+    <p>To use a trained model in the simulator, copy the saved file into <code style="background:rgba(255,255,255,0.07);padding:0.1em 0.4em;font-size:0.85em;">docs/models/</code> and select it from the Trained Model dropdown on the <a href="simulator.html" style="color:var(--gold);">Simulator</a> page.</p>
+  </div>
+</body>
+</html>

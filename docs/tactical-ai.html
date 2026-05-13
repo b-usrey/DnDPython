@@ -1,0 +1,100 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Tactical AI — DnDPython</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Cinzel+Decorative:wght@700&family=Cinzel:wght@400;600&family=Crimson+Pro:ital,wght@0,300;0,400;1,300;1,400&display=swap" rel="stylesheet" />
+  <style>
+    :root { --ink: #0d0b0e; --parchment: #f2e8d5; --gold: #c9a84c; --gold-dim: #7a5f28; --steel-dark: #111820; --glow-hot: rgba(201,168,76,0.45); --glow: rgba(201,168,76,0.18); }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { background: var(--steel-dark); color: var(--parchment); font-family: 'Crimson Pro', Georgia, serif; font-size: 18px; line-height: 1.7; min-height: 100vh; }
+    body::before { content: ''; position: fixed; inset: 0; background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E"); background-size: 200px; pointer-events: none; z-index: 0; opacity: 0.5; }
+    .page { max-width: 860px; margin: 0 auto; padding: 2rem; position: relative; z-index: 1; }
+    .page-header { display: flex; align-items: center; gap: 2rem; padding: 2rem 0 1.5rem; border-bottom: 1px solid rgba(201,168,76,0.2); margin-bottom: 2.5rem; }
+    .back-link { font-family: 'Cinzel', serif; font-size: 0.75rem; letter-spacing: 0.15em; text-transform: uppercase; color: var(--gold-dim); text-decoration: none; white-space: nowrap; flex-shrink: 0; }
+    .back-link:hover { color: var(--gold); }
+    .page-title { font-family: 'Cinzel Decorative', serif; font-size: clamp(1.4rem, 4vw, 2.2rem); color: var(--gold); text-shadow: 0 0 30px var(--glow-hot); }
+    .page-subtitle { font-family: 'Cinzel', serif; font-size: 0.8rem; letter-spacing: 0.2em; text-transform: uppercase; color: var(--gold-dim); margin-top: 0.3rem; }
+    h2 { font-family: 'Cinzel', serif; font-size: 1.1rem; color: var(--gold); letter-spacing: 0.08em; margin: 2rem 0 1rem; padding-bottom: 0.5rem; border-bottom: 1px solid rgba(201,168,76,0.2); }
+    p { color: rgba(242,232,213,0.82); margin-bottom: 1rem; }
+
+    .priority-list { display: flex; flex-direction: column; gap: 0; margin: 1rem 0 1.5rem; position: relative; }
+    .priority-list::before { content: ''; position: absolute; left: 20px; top: 20px; bottom: 20px; width: 1px; background: linear-gradient(to bottom, var(--gold-dim), rgba(201,168,76,0.1)); }
+    .priority-item { display: flex; gap: 1.25rem; align-items: flex-start; padding: 0.75rem 0; }
+    .priority-num { flex-shrink: 0; width: 40px; height: 40px; border: 1px solid var(--gold-dim); display: flex; align-items: center; justify-content: center; font-family: 'Cinzel', serif; font-size: 0.85rem; color: var(--gold); background: var(--steel-dark); position: relative; z-index: 1; }
+    .priority-body b { font-family: 'Cinzel', serif; font-size: 0.75rem; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold); display: block; margin-bottom: 0.15rem; }
+    .priority-body p { color: rgba(242,232,213,0.72); font-size: 0.92rem; margin: 0; }
+
+    .strategy-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(240px, 1fr)); gap: 1rem; margin: 1rem 0 1.5rem; }
+    .strategy-card { background: linear-gradient(160deg, rgba(30,42,56,0.5), rgba(17,24,32,0.7)); border: 1px solid rgba(201,168,76,0.15); border-top: 2px solid var(--gold-dim); padding: 1.1rem; }
+    .strategy-card h3 { font-family: 'Cinzel', serif; font-size: 0.78rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold); margin-bottom: 0.5rem; }
+    .strategy-card p { font-size: 0.88rem; color: rgba(242,232,213,0.68); margin: 0; }
+
+    .callout { background: rgba(201,168,76,0.06); border: 1px solid rgba(201,168,76,0.2); border-left: 3px solid var(--gold-dim); padding: 1rem 1.25rem; font-size: 0.92rem; color: rgba(242,232,213,0.72); margin: 1rem 0; }
+  </style>
+</head>
+<body>
+  <div class="page">
+    <header class="page-header">
+      <a class="back-link" href="index.html">← Home</a>
+      <div>
+        <h1 class="page-title">🧠 Tactical AI</h1>
+        <p class="page-subtitle">How Creatures Think</p>
+      </div>
+    </header>
+
+    <h2>Rule-Based Decision Making</h2>
+    <p>Every creature that doesn't have a trained ML model falls back to a rule-based AI that runs through a fixed priority chain each turn. The goal is to approximate competent play — not perfect play — so simulations feel like real encounters rather than random dice rolls.</p>
+
+    <div class="priority-list">
+      <div class="priority-item">
+        <div class="priority-num">1</div>
+        <div class="priority-body"><b>Skip check</b><p>If the creature is dead, incapacitated, or has no valid targets, skip the turn immediately.</p></div>
+      </div>
+      <div class="priority-item">
+        <div class="priority-num">2</div>
+        <div class="priority-body"><b>Pick a target</b><p>Focus the enemy with the lowest current HP to eliminate threats as fast as possible.</p></div>
+      </div>
+      <div class="priority-item">
+        <div class="priority-num">3</div>
+        <div class="priority-body"><b>Choose a weapon</b><p>Pick ranged if the target is far away and the creature has a ranged option; otherwise go melee.</p></div>
+      </div>
+      <div class="priority-item">
+        <div class="priority-num">4</div>
+        <div class="priority-body"><b>Move</b><p>Close to melee range if using a melee weapon; maintain kite distance if ranged. Disengage-move if critically low on HP.</p></div>
+      </div>
+      <div class="priority-item">
+        <div class="priority-num">5</div>
+        <div class="priority-body"><b>Attack</b><p>Use the main action to attack, fire all Extra Attacks, and burn Action Surge if available and a target is in range.</p></div>
+      </div>
+      <div class="priority-item">
+        <div class="priority-num">6</div>
+        <div class="priority-body"><b>Bonus actions</b><p>TWF off-hand attack, Nature's Veil, and other bonus-action abilities fire automatically when conditions are met.</p></div>
+      </div>
+    </div>
+
+    <h2>Team Memory</h2>
+    <p>Each team shares a <em>TeamMemory</em> object that tracks live combat state — who is under pressure, which enemies are threatening, and the overall HP ratio across both sides. This state vector is what gets fed into trained ML models each turn.</p>
+
+    <div class="callout">
+      The memory also drives reactive tactics: if an ally is taking heavy fire, the Protect strategy will route creatures toward that ally rather than chasing the nearest target.
+    </div>
+
+    <h2>Pluggable Strategies</h2>
+    <p>Any creature can have its behaviour overridden with one of five preset strategies. These can be selected in the Simulator and applied to a whole team:</p>
+
+    <div class="strategy-grid">
+      <div class="strategy-card"><h3>Aggressive</h3><p>Close to melee range and attack every turn, ignoring tactical positioning.</p></div>
+      <div class="strategy-card"><h3>Kite</h3><p>Maintain ranged distance while attacking — stay mobile, avoid melee contact.</p></div>
+      <div class="strategy-card"><h3>Retreat</h3><p>Flee from the strongest threat. Prioritises survival over damage output.</p></div>
+      <div class="strategy-card"><h3>Focus Fire</h3><p>Charge the lowest-HP enemy regardless of distance to eliminate targets fast.</p></div>
+      <div class="strategy-card"><h3>Protect</h3><p>Move adjacent to the most-pressured ally and absorb incoming damage.</p></div>
+    </div>
+
+    <p>ML-trained models replace this strategy selection with a learned policy — see <a href="ml-strategies.html" style="color:var(--gold);">Machine Learning Strategies</a> for how those are trained and deployed.</p>
+  </div>
+</body>
+</html>

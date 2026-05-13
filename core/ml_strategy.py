@@ -203,12 +203,14 @@ class CombatEnv:
 
         if selector is not None:
             self.cm.ai.strategy_selector = selector
+            self.cm.ai.trained_team = self.trained_team
 
         with ctx:
             self.cm.run()
 
         if selector is not None:
             self.cm.ai.strategy_selector = None
+            self.cm.ai.trained_team = None
 
         self._done = True
 

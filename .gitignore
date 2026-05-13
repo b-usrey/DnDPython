@@ -1,7 +1,6 @@
-*/__pycache__/
-*/*/__pycache__/
-*/*/*/__pycache__/
+__pycache__
 saves/
 logs/
 *.gif
+!docs/*.gif
 *.mp4
