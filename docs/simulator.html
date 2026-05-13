@@ -151,18 +151,6 @@
       line-height: 1.4;
     }
 
-    .strategy-desc {
-      background: rgba(0,0,0,0.3);
-      border-left: 2px solid var(--gold-dim);
-      padding: 0.5rem 0.75rem;
-      font-size: 0.85rem;
-      font-style: italic;
-      color: rgba(242,232,213,0.6);
-      margin-top: 0.4rem;
-      min-height: 2.8rem;
-      line-height: 1.5;
-    }
-
     /* ── Button ─────────────────────────────────────────────────────── */
     .run-btn {
       font-family: 'Cinzel', serif;
@@ -302,12 +290,6 @@
       overflow-y: auto;
     }
 
-    .tactic-row { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; font-size: 0.88rem; }
-    .tactic-label { font-family: 'Cinzel', serif; font-size: 0.68rem; letter-spacing: 0.1em; text-transform: uppercase; color: var(--gold-dim); width: 90px; flex-shrink: 0; }
-    .tactic-bar-wrap { flex: 1; background: rgba(0,0,0,0.3); height: 14px; }
-    .tactic-bar { height: 100%; background: var(--gold-dim); transition: width 0.4s; }
-    .tactic-count { color: rgba(242,232,213,0.55); width: 50px; text-align: right; flex-shrink: 0; }
-
     .hidden { display: none; }
   </style>
 </head>
@@ -337,46 +319,6 @@
           <label for="episodes-input">Episodes</label>
           <input id="episodes-input" type="number" min="1" max="100" value="10" />
           <span class="field-hint">How many fights to simulate (max 100).</span>
-        </div>
-
-        <div class="field">
-          <label for="strategy-select">AI Strategy</label>
-          <select id="strategy-select" onchange="updateStrategyDesc()">
-            <option value="">Rule-based (default)</option>
-            <option value="aggressive">Aggressive</option>
-            <option value="kite">Kite</option>
-            <option value="retreat">Retreat</option>
-            <option value="focus_fire">Focus Fire</option>
-            <option value="protect">Protect</option>
-          </select>
-          <div class="strategy-desc" id="strategy-desc">
-            Creatures use heuristic AI — attack nearest enemy, prioritise low-HP targets.
-          </div>
-        </div>
-
-        <div class="field">
-          <label for="model-select">Trained Model</label>
-          <select id="model-select" onchange="onModelChange()">
-            <option value="">None (use strategy above)</option>
-          </select>
-          <span class="field-hint">Place models in docs/models/ to make them appear here. Overrides the strategy dropdown.</span>
-        </div>
-
-        <div class="field">
-          <label for="model-type">Model Type</label>
-          <select id="model-type">
-            <option value="dqn">DQN (.pt)</option>
-            <option value="rl">RL Q-Table (.npy)</option>
-            <option value="evo">Evolutionary (.npy)</option>
-          </select>
-        </div>
-
-        <div class="field">
-          <label for="trained-team">Model Controls Team</label>
-          <select id="trained-team">
-            <option value="red">Red (monsters)</option>
-            <option value="blue">Blue (players)</option>
-          </select>
         </div>
 
         <button class="run-btn" id="run-btn" onclick="runSim()">Roll Initiative</button>
@@ -417,11 +359,6 @@
             <tbody id="res-creatures"></tbody>
           </table>
 
-          <div id="res-tactics-wrap" class="hidden">
-            <p class="panel-title" style="margin-bottom:0.75rem;">Tactic Distribution (model decisions)</p>
-            <div id="res-tactics"></div>
-          </div>
-
           <details class="log-details">
             <summary>Combat Log (last episode)</summary>
             <pre id="res-log"></pre>
@@ -435,20 +372,6 @@
 
   <script>
     const API_URL = "https://dndpython-production.up.railway.app";
-
-    const STRATEGY_DESCS = {
-      "":           "Creatures use heuristic AI — attack nearest enemy, prioritise low-HP targets.",
-      "aggressive": "Close to melee range and attack every turn, regardless of positioning.",
-      "kite":       "Maintain ranged distance while attacking — stay mobile, avoid melee.",
-      "retreat":    "Flee from the strongest threat — survive at the cost of damage output.",
-      "focus_fire": "Ignore distance, charge the lowest-HP enemy to eliminate targets fast.",
-      "protect":    "Move adjacent to the most-pressured ally and absorb incoming damage.",
-    };
-
-    function updateStrategyDesc() {
-      const val = document.getElementById("strategy-select").value;
-      document.getElementById("strategy-desc").textContent = STRATEGY_DESCS[val] ?? "";
-    }
 
     async function loadScenarios() {
       const sel = document.getElementById("scenario-select");
@@ -471,10 +394,6 @@
       const btn          = document.getElementById("run-btn");
       const scenarioName = document.getElementById("scenario-select").value;
       const episodes     = Math.min(parseInt(document.getElementById("episodes-input").value) || 1, 100);
-      const strategy     = document.getElementById("strategy-select").value || null;
-      const modelPath    = document.getElementById("model-select").value || null;
-      const modelType    = document.getElementById("model-type").value;
-      const trainedTeam  = document.getElementById("trained-team").value;
       const errEl        = document.getElementById("sim-error");
       const resultsEl    = document.getElementById("sim-results");
       const placeholder  = document.getElementById("results-placeholder");
@@ -493,7 +412,7 @@
         const res = await fetch(`${API_URL}/simulate`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ scenario_name: scenarioName, episodes, silent: true, strategy, model_path: modelPath, model_type: modelType, trained_team: trainedTeam })
+          body: JSON.stringify({ scenario_name: scenarioName, episodes, silent: true })
         });
         if (!res.ok) {
           const err = await res.json();
@@ -517,25 +436,6 @@
 
         document.getElementById("res-log").textContent = data.log;
 
-        const tacticsWrap = document.getElementById("res-tactics-wrap");
-        const tacticsDiv  = document.getElementById("res-tactics");
-        if (data.tactic_distribution && Object.keys(data.tactic_distribution).length > 0) {
-          const total = Object.values(data.tactic_distribution).reduce((a, b) => a + b, 0);
-          tacticsDiv.innerHTML = Object.entries(data.tactic_distribution)
-            .sort((a, b) => b[1] - a[1])
-            .map(([name, count]) => {
-              const pct = total > 0 ? (count / total * 100).toFixed(1) : 0;
-              return `<div class="tactic-row">
-                <span class="tactic-label">${name}</span>
-                <div class="tactic-bar-wrap"><div class="tactic-bar" style="width:${pct}%"></div></div>
-                <span class="tactic-count">${count}</span>
-              </div>`;
-            }).join("");
-          tacticsWrap.classList.remove("hidden");
-        } else {
-          tacticsWrap.classList.add("hidden");
-        }
-
         placeholder.classList.add("hidden");
         resultsEl.classList.remove("hidden");
       } catch (e) {
@@ -547,38 +447,11 @@
       }
     }
 
-    async function loadModels() {
-      const sel = document.getElementById("model-select");
-      try {
-        const res  = await fetch(`${API_URL}/models`);
-        const data = await res.json();
-        data.models.forEach(m => {
-          const opt = document.createElement("option");
-          opt.value = m.path;
-          opt.textContent = m.name;
-          opt.dataset.type = m.type;
-          sel.appendChild(opt);
-        });
-      } catch {
-        // silently leave the "None" option as the only choice
-      }
-    }
-
-    function onModelChange() {
-      const sel  = document.getElementById("model-select");
-      const opt  = sel.selectedOptions[0];
-      const type = opt?.dataset.type;
-      if (type) {
-        document.getElementById("model-type").value = type;
-      }
-    }
-
     document.addEventListener("DOMContentLoaded", () => {
       loadScenarios().then(() => {
         const preset = new URLSearchParams(location.search).get("scenario");
         if (preset) document.getElementById("scenario-select").value = preset;
       });
-      loadModels();
     });
   </script>
 
