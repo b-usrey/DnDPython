@@ -1,4 +1,6 @@
 {
+  "comment": "All items usable in scenario JSON. Weapons need ability+damage_die+attack_type. Armor needs base_ac+armor_type.",
+
   "Longbow": {
     "name": "Longbow",
     "type": "weapon",
@@ -11,61 +13,79 @@
     "long_range": 600,
     "attack_bonus": 0,
     "damage_bonus": 0,
-    "properties": [
-      "two-handed",
-      "heavy",
-      "ammunition"
-    ]
+    "properties": ["two-handed", "heavy", "ammunition"]
   },
-  "Studded Leather": {
-    "name": "Studded Leather",
-    "type": "armor",
-    "base_ac": 12,
-    "armor_type": "light",
-    "magic_bonus": 0,
-    "Description": "Studded Leather Armor"
-  },
-  "Bracers Of Archery": {
-    "name": "Bracers Of Archery",
-    "type": "trinket",
-    "item_slot": "Bracers",
-    "required_attunement": "True",
-    "feature": "BracersOfArchery",
-    "description": "A ranged weapon, 150/600 ft."
-  },
-  "Ring of Protection": {
-    "name": "Ring of Protection",
-    "type": "trinket",
-    "item_slot": "Ring",
-    "required_attunement": "True",
-    "feature": "Ring Of Protection",
-    "description": "+1 bonus to AC and saving throws while attuned."
-  },
-  "Greatsword": {
-    "name": "Greatsword",
+  "Longbow+1": {
+    "name": "Longbow+1",
     "type": "weapon",
-    "damage_die": "2d6",
-    "damageType": "slashing",
-    "ability": "Str",
+    "damage_die": "1d8",
+    "damageType": "piercing",
+    "ability": "Dex",
     "weapon_type": "martial",
-    "attack_type": "melee",
-    "normal_range": 5,
-    "long_range": 5,
+    "attack_type": "range",
+    "normal_range": 150,
+    "long_range": 600,
+    "attack_bonus": 1,
+    "damage_bonus": 1,
+    "properties": ["two-handed", "heavy", "ammunition"]
+  },
+  "Longbow+2": {
+    "name": "Longbow+2",
+    "type": "weapon",
+    "damage_die": "1d8",
+    "damageType": "piercing",
+    "ability": "Dex",
+    "weapon_type": "martial",
+    "attack_type": "range",
+    "normal_range": 150,
+    "long_range": 600,
+    "attack_bonus": 2,
+    "damage_bonus": 2,
+    "properties": ["two-handed", "heavy", "ammunition"]
+  },
+  "Shortbow": {
+    "name": "Shortbow",
+    "type": "weapon",
+    "damage_die": "1d6",
+    "damageType": "piercing",
+    "ability": "Dex",
+    "weapon_type": "simple",
+    "attack_type": "range",
+    "normal_range": 80,
+    "long_range": 320,
     "attack_bonus": 0,
     "damage_bonus": 0,
-    "properties": [
-      "two-handed",
-      "heavy"
-    ]
+    "properties": ["two-handed", "ammunition"]
   },
-  "Chain Mail": {
-    "name": "Chain Mail",
-    "type": "armor",
-    "base_ac": 16,
-    "armor_type": "heavy",
-    "magic_bonus": 0,
-    "Description": "Heavy armour, no DEX bonus"
+  "Hand Crossbow": {
+    "name": "Hand Crossbow",
+    "type": "weapon",
+    "damage_die": "1d6",
+    "damageType": "piercing",
+    "ability": "Dex",
+    "weapon_type": "martial",
+    "attack_type": "range",
+    "normal_range": 30,
+    "long_range": 120,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": ["light", "ammunition"]
   },
+  "Light Crossbow": {
+    "name": "Light Crossbow",
+    "type": "weapon",
+    "damage_die": "1d8",
+    "damageType": "piercing",
+    "ability": "Dex",
+    "weapon_type": "simple",
+    "attack_type": "range",
+    "normal_range": 80,
+    "long_range": 320,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": ["two-handed", "ammunition"]
+  },
+
   "Longsword": {
     "name": "Longsword",
     "type": "weapon",
@@ -80,12 +100,41 @@
     "damage_bonus": 0,
     "properties": ["versatile"]
   },
+  "Longsword+1": {
+    "name": "Longsword+1",
+    "type": "weapon",
+    "damage_die": "1d8",
+    "damageType": "slashing",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 1,
+    "damage_bonus": 1,
+    "properties": ["versatile"]
+  },
+  "Longsword+2": {
+    "name": "Longsword+2",
+    "type": "weapon",
+    "damage_die": "1d8",
+    "damageType": "slashing",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 2,
+    "damage_bonus": 2,
+    "properties": ["versatile"]
+  },
+
   "Shortsword": {
     "name": "Shortsword",
     "type": "weapon",
     "damage_die": "1d6",
     "damageType": "piercing",
-    "ability": "Str",
+    "ability": "Dex",
     "weapon_type": "martial",
     "attack_type": "melee",
     "normal_range": 5,
@@ -94,13 +143,488 @@
     "damage_bonus": 0,
     "properties": ["light", "finesse"]
   },
-    "Cloak of Protection": {
-        "name": "Cloak of Protection",
-        "type": "trinket",
-        "item_slot": "Ring",
-        "required_attunement": "True",
-        "feature": "CloakOfProtection",
-        "ac_bonus": 1,
-        "description": "+1 bonus to AC and saving throws while attuned"
-    }
+  "Shortsword+1": {
+    "name": "Shortsword+1",
+    "type": "weapon",
+    "damage_die": "1d6",
+    "damageType": "piercing",
+    "ability": "Dex",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 1,
+    "damage_bonus": 1,
+    "properties": ["light", "finesse"]
+  },
+
+  "Rapier": {
+    "name": "Rapier",
+    "type": "weapon",
+    "damage_die": "1d8",
+    "damageType": "piercing",
+    "ability": "Dex",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": ["finesse"]
+  },
+  "Rapier+1": {
+    "name": "Rapier+1",
+    "type": "weapon",
+    "damage_die": "1d8",
+    "damageType": "piercing",
+    "ability": "Dex",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 1,
+    "damage_bonus": 1,
+    "properties": ["finesse"]
+  },
+  "Rapier+2": {
+    "name": "Rapier+2",
+    "type": "weapon",
+    "damage_die": "1d8",
+    "damageType": "piercing",
+    "ability": "Dex",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 2,
+    "damage_bonus": 2,
+    "properties": ["finesse"]
+  },
+
+  "Dagger": {
+    "name": "Dagger",
+    "type": "weapon",
+    "damage_die": "1d4",
+    "damageType": "piercing",
+    "ability": "Dex",
+    "weapon_type": "simple",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": ["light", "finesse", "thrown"]
+  },
+  "Dagger+1": {
+    "name": "Dagger+1",
+    "type": "weapon",
+    "damage_die": "1d4",
+    "damageType": "piercing",
+    "ability": "Dex",
+    "weapon_type": "simple",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 1,
+    "damage_bonus": 1,
+    "properties": ["light", "finesse", "thrown"]
+  },
+
+  "Greatsword": {
+    "name": "Greatsword",
+    "type": "weapon",
+    "damage_die": "2d6",
+    "damageType": "slashing",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": ["two-handed", "heavy"]
+  },
+  "Greatsword+1": {
+    "name": "Greatsword+1",
+    "type": "weapon",
+    "damage_die": "2d6",
+    "damageType": "slashing",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 1,
+    "damage_bonus": 1,
+    "properties": ["two-handed", "heavy"]
+  },
+  "Greatsword+2": {
+    "name": "Greatsword+2",
+    "type": "weapon",
+    "damage_die": "2d6",
+    "damageType": "slashing",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 2,
+    "damage_bonus": 2,
+    "properties": ["two-handed", "heavy"]
+  },
+
+  "Greataxe": {
+    "name": "Greataxe",
+    "type": "weapon",
+    "damage_die": "1d12",
+    "damageType": "slashing",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": ["two-handed", "heavy"]
+  },
+  "Greataxe+1": {
+    "name": "Greataxe+1",
+    "type": "weapon",
+    "damage_die": "1d12",
+    "damageType": "slashing",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 1,
+    "damage_bonus": 1,
+    "properties": ["two-handed", "heavy"]
+  },
+  "Greataxe+2": {
+    "name": "Greataxe+2",
+    "type": "weapon",
+    "damage_die": "1d12",
+    "damageType": "slashing",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 2,
+    "damage_bonus": 2,
+    "properties": ["two-handed", "heavy"]
+  },
+
+  "Battleaxe": {
+    "name": "Battleaxe",
+    "type": "weapon",
+    "damage_die": "1d8",
+    "damageType": "slashing",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": ["versatile"]
+  },
+
+  "Handaxe": {
+    "name": "Handaxe",
+    "type": "weapon",
+    "damage_die": "1d6",
+    "damageType": "slashing",
+    "ability": "Str",
+    "weapon_type": "simple",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": ["light", "thrown"]
+  },
+
+  "Warhammer": {
+    "name": "Warhammer",
+    "type": "weapon",
+    "damage_die": "1d8",
+    "damageType": "bludgeoning",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": ["versatile"]
+  },
+  "Warhammer+1": {
+    "name": "Warhammer+1",
+    "type": "weapon",
+    "damage_die": "1d8",
+    "damageType": "bludgeoning",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 1,
+    "damage_bonus": 1,
+    "properties": ["versatile"]
+  },
+
+  "Maul": {
+    "name": "Maul",
+    "type": "weapon",
+    "damage_die": "2d6",
+    "damageType": "bludgeoning",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": ["two-handed", "heavy"]
+  },
+
+  "Mace": {
+    "name": "Mace",
+    "type": "weapon",
+    "damage_die": "1d6",
+    "damageType": "bludgeoning",
+    "ability": "Str",
+    "weapon_type": "simple",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": []
+  },
+
+  "Quarterstaff": {
+    "name": "Quarterstaff",
+    "type": "weapon",
+    "damage_die": "1d6",
+    "damageType": "bludgeoning",
+    "ability": "Str",
+    "weapon_type": "simple",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": ["versatile"]
+  },
+
+  "Spear": {
+    "name": "Spear",
+    "type": "weapon",
+    "damage_die": "1d6",
+    "damageType": "piercing",
+    "ability": "Str",
+    "weapon_type": "simple",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": ["thrown", "versatile"]
+  },
+
+  "Javelin": {
+    "name": "Javelin",
+    "type": "weapon",
+    "damage_die": "1d6",
+    "damageType": "piercing",
+    "ability": "Str",
+    "weapon_type": "simple",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": ["thrown"]
+  },
+
+  "Flail": {
+    "name": "Flail",
+    "type": "weapon",
+    "damage_die": "1d8",
+    "damageType": "bludgeoning",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": []
+  },
+
+  "Morningstar": {
+    "name": "Morningstar",
+    "type": "weapon",
+    "damage_die": "1d8",
+    "damageType": "piercing",
+    "ability": "Str",
+    "weapon_type": "martial",
+    "attack_type": "melee",
+    "normal_range": 5,
+    "long_range": 5,
+    "attack_bonus": 0,
+    "damage_bonus": 0,
+    "properties": []
+  },
+
+  "Leather Armor": {
+    "name": "Leather Armor",
+    "type": "armor",
+    "base_ac": 11,
+    "armor_type": "light",
+    "magic_bonus": 0,
+    "Description": "Light armor — AC 11 + DEX mod"
+  },
+  "Studded Leather": {
+    "name": "Studded Leather",
+    "type": "armor",
+    "base_ac": 12,
+    "armor_type": "light",
+    "magic_bonus": 0,
+    "Description": "Light armor — AC 12 + DEX mod"
+  },
+  "Studded Leather+1": {
+    "name": "Studded Leather+1",
+    "type": "armor",
+    "base_ac": 12,
+    "armor_type": "light",
+    "magic_bonus": 1,
+    "Description": "Light armor — AC 13 + DEX mod"
+  },
+  "Studded Leather+2": {
+    "name": "Studded Leather+2",
+    "type": "armor",
+    "base_ac": 12,
+    "armor_type": "light",
+    "magic_bonus": 2,
+    "Description": "Light armor — AC 14 + DEX mod"
+  },
+  "Scale Mail": {
+    "name": "Scale Mail",
+    "type": "armor",
+    "base_ac": 14,
+    "armor_type": "medium",
+    "magic_bonus": 0,
+    "Description": "Medium armor — AC 14 + DEX mod (max 2)"
+  },
+  "Breastplate": {
+    "name": "Breastplate",
+    "type": "armor",
+    "base_ac": 14,
+    "armor_type": "medium",
+    "magic_bonus": 0,
+    "Description": "Medium armor — AC 14 + DEX mod (max 2)"
+  },
+  "Breastplate+1": {
+    "name": "Breastplate+1",
+    "type": "armor",
+    "base_ac": 14,
+    "armor_type": "medium",
+    "magic_bonus": 1,
+    "Description": "Medium armor — AC 15 + DEX mod (max 2)"
+  },
+  "Half Plate": {
+    "name": "Half Plate",
+    "type": "armor",
+    "base_ac": 15,
+    "armor_type": "medium",
+    "magic_bonus": 0,
+    "Description": "Medium armor — AC 15 + DEX mod (max 2)"
+  },
+  "Half Plate+1": {
+    "name": "Half Plate+1",
+    "type": "armor",
+    "base_ac": 15,
+    "armor_type": "medium",
+    "magic_bonus": 1,
+    "Description": "Medium armor — AC 16 + DEX mod (max 2)"
+  },
+  "Chain Mail": {
+    "name": "Chain Mail",
+    "type": "armor",
+    "base_ac": 16,
+    "armor_type": "heavy",
+    "magic_bonus": 0,
+    "Description": "Heavy armor — AC 16, no DEX bonus"
+  },
+  "Chain Mail+1": {
+    "name": "Chain Mail+1",
+    "type": "armor",
+    "base_ac": 16,
+    "armor_type": "heavy",
+    "magic_bonus": 1,
+    "Description": "Heavy armor — AC 17, no DEX bonus"
+  },
+  "Plate": {
+    "name": "Plate",
+    "type": "armor",
+    "base_ac": 18,
+    "armor_type": "heavy",
+    "magic_bonus": 0,
+    "Description": "Heavy armor — AC 18, no DEX bonus"
+  },
+  "Plate+1": {
+    "name": "Plate+1",
+    "type": "armor",
+    "base_ac": 18,
+    "armor_type": "heavy",
+    "magic_bonus": 1,
+    "Description": "Heavy armor — AC 19, no DEX bonus"
+  },
+
+  "Shield": {
+    "name": "Shield",
+    "type": "armor",
+    "base_ac": 2,
+    "armor_type": "shield",
+    "magic_bonus": 0,
+    "Description": "+2 AC. Requires one free hand."
+  },
+  "Shield+1": {
+    "name": "Shield+1",
+    "type": "armor",
+    "base_ac": 3,
+    "armor_type": "shield",
+    "magic_bonus": 0,
+    "Description": "+3 AC. Requires one free hand."
+  },
+
+  "Bracers Of Archery": {
+    "name": "Bracers Of Archery",
+    "type": "trinket",
+    "item_slot": "Bracers",
+    "required_attunement": "True",
+    "feature": "BracersOfArchery",
+    "description": "+2 damage with longbows and shortbows."
+  },
+  "Ring of Protection": {
+    "name": "Ring of Protection",
+    "type": "trinket",
+    "item_slot": "Ring",
+    "required_attunement": "True",
+    "feature": "Ring Of Protection",
+    "description": "+1 bonus to AC and saving throws while attuned."
+  },
+  "Cloak of Protection": {
+    "name": "Cloak of Protection",
+    "type": "trinket",
+    "item_slot": "Ring",
+    "required_attunement": "True",
+    "feature": "CloakOfProtection",
+    "ac_bonus": 1,
+    "description": "+1 bonus to AC and saving throws while attuned."
+  }
 }
