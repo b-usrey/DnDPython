@@ -1,0 +1,93 @@
+{
+  "class_name": "Warlock",
+  "hit_die": 8,
+  "primary_abilities": ["Charisma"],
+  "saving_throws": ["Wisdom", "Charisma"],
+  "armor_proficiencies": ["light"],
+  "weapon_proficiencies": ["simple"],
+  "tool_proficiencies": [],
+  "skill_choices": {
+    "choose": 2,
+    "options": [
+      "Arcana", "Deception", "History", "Intimidation",
+      "Investigation", "Nature", "Religion"
+    ]
+  },
+  "multiclassing": {
+    "requirements": { "Charisma": 13 },
+    "armor_proficiencies": ["light"],
+    "weapon_proficiencies": ["simple"]
+  },
+  "features_by_level": {
+    "1": [
+      { "name": "Otherworldly Patron", "options": ["Fiend", "Great Old One", "Archfey"] },
+      { "name": "Pact Magic" },
+      { "name": "Eldritch Blast" }
+    ],
+    "2": [
+      {
+        "name": "Eldritch Invocation",
+        "options": [
+          "Agonizing Blast", "Armor of Shadows", "Devil's Sight",
+          "Eldritch Sight", "Fiendish Vigor", "Gaze of Two Minds",
+          "Mask of Many Faces", "Misty Visions", "Repelling Blast",
+          "Thief of Five Fates", "Voice of the Chain Master"
+        ]
+      }
+    ],
+    "3": [
+      {
+        "name": "Pact Boon",
+        "options": ["Pact of the Chain", "Pact of the Blade", "Pact of the Tome"]
+      }
+    ],
+    "4":  [ { "name": "ASI" } ],
+    "5":  [ { "name": "Eldritch Invocation", "description": "Choose an additional invocation." } ],
+    "6":  [ { "name": "Mystic Arcanum (6)", "description": "Cast a 6th-level spell once per long rest." } ],
+    "7":  [ { "name": "Eldritch Invocation", "description": "Choose an additional invocation." } ],
+    "8":  [ { "name": "ASI" } ],
+    "9":  [ { "name": "Eldritch Invocation", "description": "Choose an additional invocation." } ],
+    "10": [ { "name": "Mystic Arcanum (7)", "description": "Cast a 7th-level spell once per long rest." } ],
+    "11": [ { "name": "Eldritch Invocation", "description": "Choose an additional invocation." } ],
+    "12": [ { "name": "ASI" } ],
+    "13": [ { "name": "Mystic Arcanum (8)", "description": "Cast an 8th-level spell once per long rest." } ],
+    "15": [ { "name": "Eldritch Invocation", "description": "Choose an additional invocation." } ],
+    "16": [ { "name": "ASI" } ],
+    "17": [ { "name": "Mystic Arcanum (9)", "description": "Cast a 9th-level spell once per long rest." } ],
+    "18": [ { "name": "Eldritch Invocation", "description": "Choose an additional invocation." } ],
+    "19": [ { "name": "ASI" } ],
+    "20": [ { "name": "Eldritch Master", "description": "Regain all Pact Magic slots in 1 minute." } ]
+  },
+  "subclasses": {
+    "fiend": {
+      "features_by_level": {
+        "1":  [ { "name": "Dark One's Blessing" } ],
+        "6":  [ { "name": "Dark One's Own Luck" } ],
+        "10": [ { "name": "Fiendish Resilience" } ],
+        "14": [ { "name": "Hurl Through Hell", "description": "Teleport creature to hell. Non-combat." } ]
+      }
+    },
+    "great old one": {
+      "features_by_level": {
+        "1":  [ { "name": "Awakened Mind", "description": "Telepathy. Non-combat." } ],
+        "6":  [ { "name": "Entropic Ward" } ],
+        "10": [ { "name": "Thought Shield" } ],
+        "14": [ { "name": "Create Thrall", "description": "Charm a humanoid. Non-combat." } ]
+      }
+    }
+  },
+  "spellcasting": {
+    "spell_list": "warlock",
+    "spellcasting_ability": "Charisma",
+    "progression": {
+      "1":  { "slots": [1], "slot_level": 1 },
+      "2":  { "slots": [2], "slot_level": 1 },
+      "3":  { "slots": [2], "slot_level": 2 },
+      "5":  { "slots": [2], "slot_level": 3 },
+      "7":  { "slots": [2], "slot_level": 4 },
+      "9":  { "slots": [2], "slot_level": 5 },
+      "11": { "slots": [3], "slot_level": 5 },
+      "17": { "slots": [4], "slot_level": 5 }
+    }
+  }
+}

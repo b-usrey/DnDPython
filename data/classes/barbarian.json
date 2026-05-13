@@ -1,0 +1,71 @@
+{
+  "class_name": "Barbarian",
+  "hit_die": 12,
+  "primary_abilities": ["Strength", "Constitution"],
+  "saving_throws": ["Strength", "Constitution"],
+  "armor_proficiencies": ["light", "medium", "shields"],
+  "weapon_proficiencies": ["simple", "martial"],
+  "tool_proficiencies": [],
+  "skill_choices": {
+    "choose": 2,
+    "options": [
+      "Animal Handling", "Athletics", "Intimidation",
+      "Nature", "Perception", "Survival"
+    ]
+  },
+  "multiclassing": {
+    "requirements": { "Strength": 13 },
+    "weapon_proficiencies": ["simple", "martial"]
+  },
+  "features_by_level": {
+    "1": [
+      { "name": "Rage" },
+      { "name": "Unarmored Defense (Barbarian)", "description": "AC = 10 + DEX + CON when unarmored." }
+    ],
+    "2": [
+      { "name": "Reckless Attack" },
+      { "name": "Danger Sense" }
+    ],
+    "3": [
+      {
+        "name": "Primal Path",
+        "options": ["Berserker", "Bear Totem"]
+      }
+    ],
+    "4":  [ { "name": "ASI" } ],
+    "5":  [
+      { "name": "Extra Attack" },
+      { "name": "Fast Movement" }
+    ],
+    "7":  [ { "name": "Feral Instinct" } ],
+    "8":  [ { "name": "ASI" } ],
+    "9":  [ { "name": "Brutal Critical" } ],
+    "11": [ { "name": "Relentless Rage" } ],
+    "12": [ { "name": "ASI" } ],
+    "13": [ { "name": "Brutal Critical II", "description": "2 extra weapon dice on crits — handled by Brutal Critical on attach." } ],
+    "15": [ { "name": "Persistent Rage" } ],
+    "16": [ { "name": "ASI" } ],
+    "17": [ { "name": "Brutal Critical III", "description": "3 extra weapon dice on crits — handled by Brutal Critical on attach." } ],
+    "18": [ { "name": "Indomitable Might (Barbarian)", "description": "Min STR check = STR score. Non-combat." } ],
+    "19": [ { "name": "ASI" } ],
+    "20": [ { "name": "Primal Champion" } ]
+  },
+  "subclasses": {
+    "berserker": {
+      "features_by_level": {
+        "3":  [ { "name": "Frenzy" } ],
+        "6":  [ { "name": "Mindless Rage" } ],
+        "10": [ { "name": "Intimidating Presence", "description": "Action: frighten a creature. Non-combat." } ],
+        "14": [ { "name": "Retaliation" } ]
+      }
+    },
+    "bear totem": {
+      "features_by_level": {
+        "3":  [ { "name": "Bear Totem Spirit" } ],
+        "6":  [ { "name": "Aspect of the Bear", "description": "STR carry capacity, non-combat." } ],
+        "10": [ { "name": "Spirit Walker", "description": "Commune with spirits, non-combat." } ],
+        "14": [ { "name": "Totemic Attunement (Bear)" } ]
+      }
+    }
+  }
+}

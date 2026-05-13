@@ -1,0 +1,89 @@
+{
+  "class_name": "Paladin",
+  "hit_die": 10,
+  "primary_abilities": ["Strength", "Charisma"],
+  "saving_throws": ["Wisdom", "Charisma"],
+  "armor_proficiencies": ["all", "shields"],
+  "weapon_proficiencies": ["simple", "martial"],
+  "tool_proficiencies": [],
+  "skill_choices": {
+    "choose": 2,
+    "options": [
+      "Athletics", "Insight", "Intimidation", "Medicine",
+      "Persuasion", "Religion"
+    ]
+  },
+  "multiclassing": {
+    "requirements": { "Strength": 13, "Charisma": 13 },
+    "armor_proficiencies": ["light", "medium", "shields"],
+    "weapon_proficiencies": ["simple", "martial"]
+  },
+  "features_by_level": {
+    "1": [
+      { "name": "Divine Sense", "description": "Detect undead/fiend/celestial. Non-combat." },
+      { "name": "Lay on Hands" }
+    ],
+    "2": [
+      {
+        "name": "Fighting Style",
+        "options": ["Defense", "Dueling", "Great Weapon Fighting", "Protection"]
+      },
+      { "name": "Spellcasting", "description": "Cast paladin spells using CHA." },
+      { "name": "Divine Smite" }
+    ],
+    "3": [
+      { "name": "Divine Health", "description": "Immune to disease. Non-combat." },
+      { "name": "Sacred Oath", "options": ["Devotion", "Vengeance", "Ancients"] }
+    ],
+    "4":  [ { "name": "ASI" } ],
+    "5":  [
+      { "name": "Extra Attack" },
+      { "name": "Improved Divine Smite Stub", "description": "No-op — Improved Divine Smite added at lv11." }
+    ],
+    "6":  [ { "name": "Aura of Protection" } ],
+    "7":  [ { "name": "Aura of Courage" } ],
+    "8":  [ { "name": "ASI" } ],
+    "10": [ { "name": "Aura of Courage", "description": "Already granted at lv7." } ],
+    "11": [ { "name": "Improved Divine Smite" } ],
+    "12": [ { "name": "ASI" } ],
+    "14": [ { "name": "Cleansing Touch", "description": "End spells as bonus action. Non-combat." } ],
+    "16": [ { "name": "ASI" } ],
+    "18": [ { "name": "Aura Improvements", "description": "Aura radius extends to 30ft — passive flag." } ],
+    "19": [ { "name": "ASI" } ],
+    "20": [ { "name": "Sacred Oath Feature 20" } ]
+  },
+  "subclasses": {
+    "devotion": {
+      "features_by_level": {
+        "3":  [ { "name": "Sacred Weapon" } ],
+        "7":  [ { "name": "Aura of Devotion", "description": "Immune to charm for you and nearby allies. Non-combat." } ],
+        "15": [ { "name": "Purity of Spirit", "description": "Blessed by alignment — non-combat." } ],
+        "20": [ { "name": "Holy Nimbus" } ]
+      }
+    },
+    "vengeance": {
+      "features_by_level": {
+        "3":  [ { "name": "Vow of Enmity" } ],
+        "7":  [ { "name": "Relentless Avenger" } ],
+        "15": [ { "name": "Soul of Vengeance" } ],
+        "20": [ { "name": "Avenging Angel", "description": "Fly speed, frightening aura — non-combat." } ]
+      }
+    }
+  },
+  "spellcasting": {
+    "spell_list": "paladin",
+    "spellcasting_ability": "Charisma",
+    "progression": {
+      "2":  { "slots": [2] },
+      "3":  { "slots": [3] },
+      "5":  { "slots": [4, 2] },
+      "7":  { "slots": [4, 3] },
+      "9":  { "slots": [4, 3, 2] },
+      "11": { "slots": [4, 3, 3] },
+      "13": { "slots": [4, 3, 3, 1] },
+      "15": { "slots": [4, 3, 3, 2] },
+      "17": { "slots": [4, 3, 3, 3, 1] },
+      "19": { "slots": [4, 3, 3, 3, 2] }
+    }
+  }
+}
