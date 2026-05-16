@@ -450,3 +450,8 @@ class ThiefsReflexes(Feature):
         self._used_round1 = True
         creature.actions.actions += 1
         print(f"  {creature.name}: Thief's Reflexes — extra action in round 1!")
+
+
+class RoguishArchetype(Feature):
+    """Subclass selection at level 3. Non-combat stub."""
+    name = "Roguish Archetype"

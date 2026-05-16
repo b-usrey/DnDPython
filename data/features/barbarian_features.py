@@ -529,3 +529,8 @@ class TotemicAttunementBear(Feature):
                 attack.disadvantage = True
                 print(f"  {self.owner.name}: Bear Totem — "
                       f"{attacker.name} has disadvantage on {target.name}!")
+
+
+class PrimalPath(Feature):
+    """Subclass selection at level 3. Non-combat stub."""
+    name = "Primal Path"

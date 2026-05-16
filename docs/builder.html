@@ -291,11 +291,13 @@
         <select id="classSelect" onchange="onClassChange()">
           <option value="">— Choose class —</option>
           <option>Barbarian</option>
+          <option>Cleric</option>
           <option>Fighter</option>
           <option>Paladin</option>
           <option>Ranger</option>
           <option>Rogue</option>
           <option>Warlock</option>
+          <option>Wizard</option>
         </select>
       </div>
     </div>
@@ -676,6 +678,51 @@ const SA_VALS   = [15,14,13,12,10,8];
 const PB_COST   = {8:0,9:1,10:2,11:3,12:4,13:5,14:7,15:9};
 const ROMAN     = ["","I","II","III","IV","V","VI","VII","VIII","IX","X","XI","XII","XIII","XIV","XV","XVI","XVII","XVIII","XIX","XX"];
 
+const FEATS_DATA = [
+  {name:"Alert",              prereq:null,           stat:null,         desc:"+5 to initiative. Cannot be surprised. Hidden attackers gain no advantage against you."},
+  {name:"Athlete",            prereq:null,           stat:"Str or Dex", desc:"Climbing costs no extra movement. Stand up uses only 5ft. Running jump needs only 5ft run-up."},
+  {name:"Actor",              prereq:null,           stat:"Cha",        desc:"Advantage on Deception/Performance when disguised. Mimic voices of creatures you've heard for 1 minute."},
+  {name:"Charger",            prereq:null,           stat:null,         desc:"When you Dash, bonus action melee attack (+5 damage) or shove (10ft)."},
+  {name:"Crossbow Expert",    prereq:null,           stat:null,         desc:"Ignore loading property. No disadvantage in melee. Bonus hand-crossbow attack after Attack action."},
+  {name:"Defensive Duelist",  prereq:"Dex 13",       stat:null,         desc:"Reaction: add proficiency bonus to AC against one melee attack while wielding a finesse weapon."},
+  {name:"Dual Wielder",       prereq:null,           stat:null,         desc:"+1 AC while wielding two melee weapons. Use non-light weapons for two-weapon fighting. Draw two weapons at once."},
+  {name:"Dungeon Delver",     prereq:null,           stat:null,         desc:"Adv on Perception/Investigation for secret doors and traps. Resistance to trap damage. Adv on saves vs traps."},
+  {name:"Durable",            prereq:null,           stat:"Con",        desc:"Minimum HP regained from a Hit Die equals twice your Con modifier (minimum 2)."},
+  {name:"Elemental Adept",    prereq:"Spellcasting", stat:null,         desc:"Choose a damage type. Your spells ignore resistance to it. Treat 1s as 2s on damage dice for that type."},
+  {name:"Grappler",           prereq:"Str 13",       stat:null,         desc:"Advantage on attacks vs creatures you're grappling. Can restrain a grappled creature (both restrained)."},
+  {name:"Great Weapon Master",prereq:null,           stat:null,         desc:"On crit or kill, make a bonus attack. Or take -5 to hit for +10 damage with a heavy weapon."},
+  {name:"Healer",             prereq:null,           stat:null,         desc:"Stabilize with a Medicine check. Use healer's kit: restore 1d6+4+HD HP once per creature per rest."},
+  {name:"Heavily Armored",    prereq:"Med Armor",    stat:"Str",        desc:"Gain proficiency with heavy armor."},
+  {name:"Heavy Armor Master", prereq:"Heavy Armor",  stat:"Str",        desc:"Non-magical bludgeoning, piercing, and slashing damage reduced by 3 while wearing heavy armor."},
+  {name:"Inspiring Leader",   prereq:"Cha 13",       stat:null,         desc:"10-min speech grants up to 6 creatures temp HP = your level + Cha modifier."},
+  {name:"Keen Mind",          prereq:null,           stat:"Int",        desc:"Always know compass north and hours until sunrise/set. Recall anything seen/heard in the past month."},
+  {name:"Lightly Armored",    prereq:null,           stat:"Str or Dex", desc:"Gain proficiency with light armor."},
+  {name:"Linguist",           prereq:null,           stat:"Int",        desc:"Learn 3 languages. Create written ciphers only you (or taught creatures) can decode."},
+  {name:"Lucky",              prereq:null,           stat:null,         desc:"3 luck points per long rest. Spend to add a d20 on attack/check/save (take higher), or force enemy reroll."},
+  {name:"Mage Slayer",        prereq:null,           stat:null,         desc:"Reaction attack when a nearby creature casts a spell. Adv on Con saves vs concentration. Casters near you have disadv on concentration."},
+  {name:"Magic Initiate",     prereq:null,           stat:null,         desc:"Choose a class: learn 2 cantrips and 1st-level spell from its list (spell cast once per long rest)."},
+  {name:"Martial Adept",      prereq:null,           stat:null,         desc:"Learn 2 Battle Master maneuvers. Gain one superiority die (d6) to use them."},
+  {name:"Medium Armor Master",prereq:"Med Armor",    stat:null,         desc:"No Stealth disadvantage in medium armor. Max Dex bonus to AC from medium armor increases to +3."},
+  {name:"Mobile",             prereq:null,           stat:null,         desc:"+10ft speed. Dash ignores difficult terrain. No opportunity attacks from creatures you attacked this turn."},
+  {name:"Moderately Armored", prereq:"Light Armor",  stat:"Str or Dex", desc:"Gain proficiency with medium armor and shields."},
+  {name:"Mounted Combatant",  prereq:null,           stat:null,         desc:"Adv on melee attacks vs unmounted creatures smaller than mount. Redirect attacks targeting mount to yourself."},
+  {name:"Observant",          prereq:null,           stat:"Int or Wis", desc:"+5 passive Perception and passive Investigation. If you can see a creature's mouth, you can read its lips."},
+  {name:"Polearm Master",     prereq:null,           stat:null,         desc:"Bonus action butt-end attack (1d4 bludgeoning). Opportunity attack when creatures enter your reach."},
+  {name:"Resilient",          prereq:null,           stat:"Any",        desc:"Gain proficiency in saving throws using the chosen ability score."},
+  {name:"Ritual Caster",      prereq:"Int or Wis 13",stat:null,         desc:"Learn ritual spells from one class list. Can only cast them as rituals (not as normal spells)."},
+  {name:"Savage Attacker",    prereq:null,           stat:null,         desc:"Once per turn, reroll a melee weapon's damage dice and take the higher result."},
+  {name:"Sentinel",           prereq:null,           stat:null,         desc:"Opportunity attacks reduce speed to 0. Reaction attack when ally nearby is attacked. Disengage doesn't prevent your attacks."},
+  {name:"Sharpshooter",       prereq:null,           stat:null,         desc:"No disadvantage at long range. Ignore half and 3/4 cover. Take -5 to hit for +10 damage with ranged weapons."},
+  {name:"Shield Master",      prereq:null,           stat:null,         desc:"Bonus action shove while wielding a shield. Add shield AC to Dex saves you succeed on (half damage = no damage)."},
+  {name:"Skilled",            prereq:null,           stat:null,         desc:"Gain proficiency in any 3 skills or tool sets of your choice."},
+  {name:"Skulker",            prereq:"Dex 13",       stat:null,         desc:"Hide when lightly obscured. Ranged miss doesn't reveal position. Dim light doesn't impose Perception disadvantage."},
+  {name:"Spell Sniper",       prereq:"Spellcasting", stat:null,         desc:"Double range of attack-roll spells. Ignore half and 3/4 cover. Learn one ranged attack cantrip."},
+  {name:"Tavern Brawler",     prereq:null,           stat:"Str or Con", desc:"Proficiency with improvised weapons and unarmed strikes (1d4). Grapple as bonus action after a hit."},
+  {name:"Tough",              prereq:null,           stat:null,         desc:"+2 max HP per level (retroactive from level 1). Max HP increases by 2 on each future level-up."},
+  {name:"War Caster",         prereq:"Spellcasting", stat:null,         desc:"Adv on Con saves for concentration. Somatic components with weapon/shield hands. Cast a spell as an opportunity attack."},
+  {name:"Weapon Master",      prereq:null,           stat:"Str or Dex", desc:"Gain proficiency with 4 weapons of your choice."}
+];
+
 // ═══════════════════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════════════════
@@ -687,7 +734,7 @@ let pbVals    = {};  // stat → number (point-buy)
 let mnVals    = {};  // stat → number (manual)
 let flexBonus = {};  // stat → +1 for Half-Elf flexible picks
 let featureChoices = {}; // "Class__lv__FeatureName" → option string
-let asiChoices     = {}; // level → {type:"2+0"|"1+1", s1:stat, s2:stat}
+let asiChoices     = {}; // level → {type:"2+0"|"1+1"|"feat", s1, s2, feat, featStat}
 let invSet    = new Set();
 let eqSet     = new Set();
 let monId     = 0;
@@ -866,39 +913,120 @@ function renderChoice(parent, cls, lvl, f) {
 
 function renderAsi(parent, lvl) {
   const key = String(lvl);
-  if (!asiChoices[key]) asiChoices[key] = {type:'2+0', s1:'Str', s2:'Dex'};
+  if (!asiChoices[key]) asiChoices[key] = {type:'2+0', s1:'Str', s2:'Dex', feat:FEATS_DATA[0].name, featStat:'Str'};
   const ac = asiChoices[key];
 
   const wrap = document.createElement('div');
   wrap.className = 'asi-widget';
+  wrap.style.flexWrap = 'wrap';
 
   // Type selector
   const typeSel = document.createElement('select');
-  [{v:'2+0',l:'+2 to one stat'},{v:'1+1',l:'+1 to two stats'}].forEach(({v,l}) => {
+  [{v:'2+0',l:'+2 to one stat'},{v:'1+1',l:'+1 to two stats'},{v:'feat',l:'Take a Feat'}].forEach(({v,l}) => {
     const o = document.createElement('option'); o.value=v; o.textContent=l; typeSel.appendChild(o);
   });
   typeSel.value = ac.type;
 
-  // Stat selectors
-  const s1Sel = makeStatSelect(ac.s1);
+  // ASI stat selectors
+  const s1Sel = makeStatSelect(ac.s1 || 'Str');
   const andSpan = document.createElement('span'); andSpan.textContent = '& +1';
-  const s2Sel = makeStatSelect(ac.s2);
-  andSpan.style.display = ac.type === '1+1' ? '' : 'none';
-  s2Sel.style.display   = ac.type === '1+1' ? '' : 'none';
+  const s2Sel = makeStatSelect(ac.s2 || 'Dex');
+
+  // Feat selector
+  const featSel = document.createElement('select');
+  featSel.style.cssText = 'width:auto;min-width:190px;padding:0.2rem 0.5rem;font-size:0.85rem';
+  FEATS_DATA.forEach(f => {
+    const o = document.createElement('option');
+    o.value = f.name;
+    o.textContent = f.name + (f.prereq ? ` (${f.prereq})` : '');
+    o.title = f.desc;
+    featSel.appendChild(o);
+  });
+  featSel.value = ac.feat || FEATS_DATA[0].name;
+  if (!ac.feat) ac.feat = featSel.value;
+
+  // Feat stat bonus UI (for feats like Resilient, Athlete, etc.)
+  const featStatLbl = document.createElement('span');
+  featStatLbl.style.cssText = 'font-size:0.82rem;color:var(--gold-dim)';
+  const featStatSel = makeStatSelect(ac.featStat || 'Str');
+
+  // Feat description tooltip row
+  const featDesc = document.createElement('div');
+  featDesc.style.cssText = 'width:100%;font-size:0.78rem;color:var(--gold-dim);font-style:italic;margin-top:0.25rem;padding-left:0.25rem';
+
+  function updateFeatDesc() {
+    const fd = FEATS_DATA.find(f => f.name === ac.feat);
+    featDesc.textContent = fd ? fd.desc : '';
+  }
+
+  function updateVisibility() {
+    const isFeat = ac.type === 'feat';
+    const is11   = ac.type === '1+1';
+    s1Sel.style.display    = isFeat ? 'none' : '';
+    andSpan.style.display  = is11   ? '' : 'none';
+    s2Sel.style.display    = is11   ? '' : 'none';
+    featSel.style.display  = isFeat ? '' : 'none';
+    featDesc.style.display = isFeat ? '' : 'none';
+    if (isFeat) {
+      const fd = FEATS_DATA.find(f => f.name === ac.feat);
+      const hasStat = fd && fd.stat;
+      featStatLbl.style.display = hasStat ? '' : 'none';
+      featStatSel.style.display = hasStat ? '' : 'none';
+      if (hasStat) {
+        featStatLbl.textContent = `+1 (${fd.stat}):`;
+        refillFeatStatSel(featStatSel, fd.stat, ac.featStat);
+      }
+      updateFeatDesc();
+    } else {
+      featStatLbl.style.display = 'none';
+      featStatSel.style.display = 'none';
+    }
+  }
 
   const lbl = document.createElement('label'); lbl.textContent = 'ASI:';
-  wrap.appendChild(lbl); wrap.appendChild(typeSel); wrap.appendChild(s1Sel);
-  wrap.appendChild(andSpan); wrap.appendChild(s2Sel);
+  wrap.appendChild(lbl);
+  wrap.appendChild(typeSel);
+  wrap.appendChild(s1Sel);
+  wrap.appendChild(andSpan);
+  wrap.appendChild(s2Sel);
+  wrap.appendChild(featSel);
+  wrap.appendChild(featStatLbl);
+  wrap.appendChild(featStatSel);
+  wrap.appendChild(featDesc);
   parent.appendChild(wrap);
+
+  updateVisibility();
 
   typeSel.onchange = () => {
     ac.type = typeSel.value;
-    andSpan.style.display = ac.type === '1+1' ? '' : 'none';
-    s2Sel.style.display   = ac.type === '1+1' ? '' : 'none';
+    updateVisibility();
     refreshStatTotals();
   };
   s1Sel.onchange = () => { ac.s1 = s1Sel.value; refreshStatTotals(); };
   s2Sel.onchange = () => { ac.s2 = s2Sel.value; refreshStatTotals(); };
+  featSel.onchange = () => {
+    ac.feat = featSel.value;
+    const fd = FEATS_DATA.find(f => f.name === ac.feat);
+    if (fd && fd.stat) {
+      refillFeatStatSel(featStatSel, fd.stat, ac.featStat);
+      ac.featStat = featStatSel.value;
+    }
+    updateVisibility();
+    refreshStatTotals();
+  };
+  featStatSel.onchange = () => { ac.featStat = featStatSel.value; refreshStatTotals(); };
+}
+
+function refillFeatStatSel(sel, statDesc, current) {
+  const map = {
+    'Str or Dex': ['Str','Dex'], 'Str or Con': ['Str','Con'],
+    'Int or Wis': ['Int','Wis'], 'Str': ['Str'], 'Dex': ['Dex'],
+    'Con': ['Con'], 'Int': ['Int'], 'Wis': ['Wis'], 'Cha': ['Cha']
+  };
+  const valid = map[statDesc] || STATS;
+  sel.innerHTML = '';
+  valid.forEach(s => { const o = document.createElement('option'); o.value=s; o.textContent=s; sel.appendChild(o); });
+  sel.value = valid.includes(current) ? current : valid[0];
 }
 
 function makeStatSelect(val) {
@@ -1022,8 +1150,12 @@ function getRaceBonuses() {
 function getAsiBonuses() {
   const bon = {}; STATS.forEach(s => bon[s] = 0);
   Object.values(asiChoices).forEach(ac => {
-    if (ac.s1) bon[ac.s1] = (bon[ac.s1]||0) + (ac.type === '2+0' ? 2 : 1);
-    if (ac.type === '1+1' && ac.s2) bon[ac.s2] = (bon[ac.s2]||0) + 1;
+    if (ac.type === 'feat') {
+      if (ac.featStat && STATS.includes(ac.featStat)) bon[ac.featStat] = (bon[ac.featStat]||0) + 1;
+    } else {
+      if (ac.s1) bon[ac.s1] = (bon[ac.s1]||0) + (ac.type === '2+0' ? 2 : 1);
+      if (ac.type === '1+1' && ac.s2) bon[ac.s2] = (bon[ac.s2]||0) + 1;
+    }
   });
   return bon;
 }
@@ -1210,10 +1342,24 @@ function buildPlayer() {
   // Speed from race
   const speed = rn ? RACES_DATA[rn].speed : 30;
 
+  // Export stats WITHOUT feat stat bonuses — the Python feature attach()
+  // applies those, so including them here would double-count them.
+  const base   = getBaseStats();
+  const race   = getRaceBonuses();
+  const asiOnly = {}; STATS.forEach(s => asiOnly[s] = 0);
+  Object.values(asiChoices).forEach(ac => {
+    if (ac.type !== 'feat') {
+      if (ac.s1) asiOnly[ac.s1] = (asiOnly[ac.s1]||0) + (ac.type === '2+0' ? 2 : 1);
+      if (ac.type === '1+1' && ac.s2) asiOnly[ac.s2] = (asiOnly[ac.s2]||0) + 1;
+    }
+  });
+  const exportStats = {};
+  STATS.forEach(s => exportStats[s] = (base[s]||10) + (race[s]||0) + (asiOnly[s]||0));
+
   const player = {
     name,
     classes: [[cls, lv]],
-    stats: getFinalStats(),
+    stats: exportStats,
     speed,
     items: [...invSet],
     equipped: [...eqSet],
@@ -1224,6 +1370,14 @@ function buildPlayer() {
     player.subclasses = { [cls]: subclass.toLowerCase().replace(/ /g,'_') };
   }
   if (rn) player.race = rn;
+
+  // Collect feat selections
+  const feats = [];
+  Object.values(asiChoices).forEach(ac => {
+    if (ac.type === 'feat' && ac.feat) feats.push(ac.feat);
+  });
+  if (feats.length) player.feats = feats;
+
   return player;
 }
 

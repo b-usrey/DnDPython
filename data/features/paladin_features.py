@@ -103,19 +103,28 @@ class DivineSmite(Feature):
     def on_hit(self, data):
         if data.get("attacker") is not self.owner:
             return
-        if self._slots_remaining <= 0:
-            return
         attack = data.get("attack")
         if not attack or getattr(attack, "range", False):
             return   # melee only
 
-        self._slots_remaining -= 1
-        # 2d8 for 1st-level slot, +1d8 on crit (always max 5d8 = 5 dice)
+        # Prefer the shared PaladinSpellcasting pool when present
+        slots = getattr(self.owner, "spell_slots", None)
+        if slots is not None:
+            if not slots.has_slot(1):
+                return
+            slots.spend_slot(1)
+            slots_left = slots.remaining()
+        else:
+            if self._slots_remaining <= 0:
+                return
+            self._slots_remaining -= 1
+            slots_left = self._slots_remaining
+
         n_dice = 3 if attack.critical else 2
         attack.extra_dice.extend([(1, 8)] * n_dice)
-        attack.damage_type = "radiant"   # smite deals radiant
+        attack.damage_type = "radiant"
         print(f"  {self.owner.name}: Divine Smite! ({n_dice}d8 radiant, "
-              f"{self._slots_remaining} slots left)")
+              f"slots={slots_left})")
 
 
 # ---------------------------------------------------------------------------
@@ -443,3 +452,12 @@ class SoulOfVengeance(Feature):
 
 class AvengerAngel(Feature):
     name = "Avenging Angel"
+
+
+# ---------------------------------------------------------------------------
+# Non-combat stubs
+# ---------------------------------------------------------------------------
+
+class DivineSense(Feature):
+    """Lv1: detect celestials/fiends/undead within 60ft. Non-combat stub."""
+    name = "Divine Sense"

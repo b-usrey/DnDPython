@@ -124,14 +124,43 @@ class PactMagic(Feature):
             2 if warlock_lvl >= 2  else
             1
         )
+        # Pact slot level (all slots are the same level)
+        self.slot_level = (
+            5 if warlock_lvl >= 9 else
+            4 if warlock_lvl >= 7 else
+            3 if warlock_lvl >= 5 else
+            2 if warlock_lvl >= 3 else
+            1
+        )
         self.slots_remaining = self.max_slots
-        print(f"  {owner.name}: Pact Magic ({self.slots_remaining} slots)")
+        # Expose the same interface as Spellcasting so spells can use owner.spell_slots
+        cha_mod = owner.statblock.mods.get("Cha", 0)
+        pb = 2 + (warlock_lvl - 1) // 4
+        self.spell_attack = pb + cha_mod
+        self.spell_dc     = 8 + pb + cha_mod
+        owner.spell_slots = self
+        print(f"  {owner.name}: Pact Magic ({self.slots_remaining}×{self.slot_level}th-level slots, "
+              f"DC {self.spell_dc})")
 
     def use_slot(self) -> bool:
         if self.slots_remaining > 0:
             self.slots_remaining -= 1
             return True
         return False
+
+    # ── Shared spell-slot interface (compatible with Spellcasting) ───────────
+
+    def has_slot(self, min_level: int = 1) -> bool:
+        return self.slots_remaining > 0 and self.slot_level >= min_level
+
+    def spend_slot(self, min_level: int = 1) -> int | None:
+        if self.has_slot(min_level):
+            self.slots_remaining -= 1
+            return self.slot_level
+        return None
+
+    def remaining(self) -> dict:
+        return {self.slot_level: self.slots_remaining} if self.slots_remaining > 0 else {}
 
 
 # ---------------------------------------------------------------------------

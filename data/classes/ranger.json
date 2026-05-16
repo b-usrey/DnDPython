@@ -29,7 +29,8 @@
         "options": ["Archery", "Defense", "Dueling", "Two-Weapon Fighting",
                     "Druidic Warrior", "Thrown Weapon Fighting", "Blind Fighting"]
       },
-      { "name": "Spellcasting",    "description": "Cast ranger spells using WIS." }
+      { "name": "Spellcasting",    "description": "Cast ranger spells using WIS." },
+      { "name": "Hunter's Mark",   "description": "Concentration; +1d6 damage vs marked target." }
     ],
     "3": [
       {
