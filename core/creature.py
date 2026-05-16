@@ -81,6 +81,9 @@ class Creature:
         self._conc_feature  = None   # Feature to notify if concentration breaks
         self.speed = 30
 
+        # ── Damage resistances (set of damage type strings) ───────────────
+        self.resistances: set = set()
+
         # ── Features & events ────────────────────────────────────────────
         self.features = []
         self.event_manager = event_manager
@@ -143,6 +146,9 @@ class Creature:
         """
         if amount <= 0:
             return 0
+
+        if damage_type and damage_type.lower() in self.resistances:
+            amount = max(1, amount // 2)
 
         # Temp HP absorbs first
         absorbed  = min(self._temp_hp, amount)
@@ -289,8 +295,9 @@ class Creature:
         if damage is None:
             damage = attack.roll_damage()
         if damage and damage > 0:
+            dmg_type = getattr(attack, "damage_type", None)
             print(f"{self.name} takes {damage} damage!")
-            self.take_damage(damage)
+            self.take_damage(damage, damage_type=dmg_type)
             print(f"  ({self._current_hp}/{self._max_hp} HP remaining)")
 
     # ── Conditions ────────────────────────────────────────────────────────

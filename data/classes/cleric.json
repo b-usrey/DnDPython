@@ -1,0 +1,170 @@
+{
+  "class_name": "Cleric",
+  "hit_die": 8,
+  "primary_abilities": ["Wisdom"],
+  "saving_throws": ["Wisdom", "Charisma"],
+  "armor_proficiencies": ["light", "medium", "shields"],
+  "weapon_proficiencies": ["simple"],
+  "tool_proficiencies": [],
+  "skill_choices": {
+    "choose": 2,
+    "options": [
+      "History", "Insight", "Medicine", "Persuasion", "Religion"
+    ]
+  },
+  "multiclassing": {
+    "requirements": { "Wisdom": 13 },
+    "armor_proficiencies": ["light", "medium", "shields"],
+    "weapon_proficiencies": []
+  },
+  "features_by_level": {
+    "1": [
+      { "name": "Spellcasting",      "description": "Cast cleric spells using WIS." },
+      { "name": "Sacred Flame",      "description": "Cantrip: DEX save or 1d8 radiant (ignores cover)." },
+      { "name": "Toll the Dead",     "description": "Cantrip: WIS save or 1d8/1d12 necrotic." },
+      { "name": "Guiding Bolt",      "description": "1st level: ranged spell attack, 4d6 radiant; next attack vs target has advantage." },
+      { "name": "Healing Word",      "description": "1st level: bonus action, 1d4+WIS HP." },
+      { "name": "Cure Wounds",       "description": "1st level: action, 1d8+WIS HP." },
+      {
+        "name": "Divine Domain",
+        "options": ["Life", "Light", "War", "Knowledge",
+                    "Trickery", "Nature", "Tempest", "Forge", "Grave"]
+      }
+    ],
+    "2": [
+      { "name": "Channel Divinity",  "description": "Domain-specific uses — see subclass." },
+      { "name": "Bless",             "description": "1st level: concentration; +1d4 to attack rolls and saves." },
+      { "name": "Spiritual Weapon",  "description": "2nd level: bonus action force weapon attack each turn." },
+      { "name": "Hold Person",       "description": "2nd level: WIS save or paralyzed." }
+    ],
+    "3": [
+      { "name": "Inflict Wounds",    "description": "1st level: melee spell attack, 3d10 necrotic." }
+    ],
+    "4":  [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "5": [
+      { "name": "Destroy Undead",    "description": "Channel Divinity improvement. Non-combat." },
+      { "name": "Spirit Guardians",  "description": "3rd level: concentration; 3d8 radiant/necrotic aura each turn." },
+      { "name": "Flame Strike",      "description": "5th level: DEX save, 4d6 fire + 4d6 radiant." }
+    ],
+    "6": [
+      { "name": "Channel Divinity Improvement", "description": "2 uses of Channel Divinity per short rest." },
+      { "name": "Divine Domain Feature",        "description": "Subclass feature at level 6." }
+    ],
+    "7": [
+      { "name": "Thunderwave",       "description": "1st level: STR save, 2d8 thunder." }
+    ],
+    "8":  [
+      { "name": "ASI",               "description": "Ability Score Improvement or Feat." },
+      { "name": "Divine Domain Feature", "description": "Subclass feature at level 8." }
+    ],
+    "9": [
+      { "name": "Banishment",        "description": "4th level: CHA save or incapacitated while concentration holds." }
+    ],
+    "10": [
+      { "name": "Divine Intervention", "description": "Call on your deity for aid. Non-combat." }
+    ],
+    "11": [
+      { "name": "Destroy Undead Improvement", "description": "Higher CR undead destroyed. Non-combat." }
+    ],
+    "12": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "14": [ { "name": "Destroy Undead Improvement", "description": "Higher CR undead destroyed. Non-combat." } ],
+    "16": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "17": [
+      { "name": "Divine Domain Feature", "description": "Subclass capstone feature." }
+    ],
+    "18": [
+      { "name": "Channel Divinity Improvement", "description": "3 uses of Channel Divinity per short rest." }
+    ],
+    "19": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "20": [
+      { "name": "Divine Intervention Improvement", "description": "Divine Intervention automatically succeeds. Non-combat." }
+    ]
+  },
+  "subclasses": {
+    "life": {
+      "features_by_level": {
+        "1": [
+          { "name": "Disciple of Life",   "description": "Healing spells restore 2+spell_level extra HP. Non-combat." },
+          { "name": "Bonus Proficiency",  "description": "Heavy armor proficiency." }
+        ],
+        "2": [
+          { "name": "Preserve Life",      "description": "Channel Divinity: distribute 5×cleric_level HP among allies. Non-combat." }
+        ],
+        "6": [
+          { "name": "Blessed Healer",     "description": "Healing others also heals you 2+spell_level HP. Non-combat." }
+        ],
+        "8": [
+          { "name": "Divine Strike",      "description": "Once per turn: +1d8 radiant on weapon hit (2d8 at lv14). Non-combat in this sim." }
+        ],
+        "17": [
+          { "name": "Supreme Healing",    "description": "Maximize healing dice instead of rolling. Non-combat." }
+        ]
+      }
+    },
+    "war": {
+      "features_by_level": {
+        "1": [
+          { "name": "War Priest",         "description": "WIS-mod times per long rest: bonus action weapon attack after Attack action. Non-combat." },
+          { "name": "Bonus Proficiency",  "description": "Heavy armor and martial weapon proficiency." }
+        ],
+        "2": [
+          { "name": "Guided Strike",      "description": "Channel Divinity: +10 to one attack roll. Non-combat in this sim." }
+        ],
+        "6": [
+          { "name": "War God's Blessing", "description": "Channel Divinity: grant +10 to an ally's attack roll (reaction). Non-combat in this sim." }
+        ],
+        "8": [
+          { "name": "Divine Strike",      "description": "Once per turn: +1d8 weapon damage (2d8 at lv14). Non-combat in this sim." }
+        ],
+        "17": [
+          { "name": "Avatar of Battle",   "description": "Resistance to bludgeoning/piercing/slashing from non-magical attacks. Non-combat in this sim." }
+        ]
+      }
+    },
+    "light": {
+      "features_by_level": {
+        "1": [
+          { "name": "Warding Flare",      "description": "Reaction: impose disadvantage on attack against you or ally. Non-combat in this sim." }
+        ],
+        "2": [
+          { "name": "Radiance of the Dawn", "description": "Channel Divinity: 2d10+lvl radiant vs undead. Non-combat in this sim." }
+        ],
+        "6": [
+          { "name": "Improved Flare",     "description": "Warding Flare can protect allies within 30ft. Non-combat in this sim." }
+        ],
+        "8": [
+          { "name": "Potent Spellcasting", "description": "+WIS mod to cleric cantrip damage rolls. Non-combat in this sim." }
+        ],
+        "17": [
+          { "name": "Corona of Light",    "description": "Sunlight aura; undead/vampire weaknesses within 60ft. Non-combat in this sim." }
+        ]
+      }
+    }
+  },
+  "spellcasting": {
+    "spell_list": "cleric",
+    "spellcasting_ability": "Wisdom",
+    "progression": {
+      "1":  { "slots": [2] },
+      "2":  { "slots": [3] },
+      "3":  { "slots": [4, 2] },
+      "4":  { "slots": [4, 3] },
+      "5":  { "slots": [4, 3, 2] },
+      "6":  { "slots": [4, 3, 3] },
+      "7":  { "slots": [4, 3, 3, 1] },
+      "8":  { "slots": [4, 3, 3, 2] },
+      "9":  { "slots": [4, 3, 3, 3, 1] },
+      "10": { "slots": [4, 3, 3, 3, 2] },
+      "11": { "slots": [4, 3, 3, 3, 2] },
+      "12": { "slots": [4, 3, 3, 3, 2] },
+      "13": { "slots": [4, 3, 3, 3, 2, 1] },
+      "14": { "slots": [4, 3, 3, 3, 2, 1] },
+      "15": { "slots": [4, 3, 3, 3, 2, 1, 1] },
+      "16": { "slots": [4, 3, 3, 3, 2, 1, 1] },
+      "17": { "slots": [4, 3, 3, 3, 2, 1, 1, 1] },
+      "18": { "slots": [4, 3, 3, 3, 3, 1, 1, 1] },
+      "19": { "slots": [4, 3, 3, 3, 3, 2, 1, 1] },
+      "20": { "slots": [4, 3, 3, 3, 3, 2, 2, 1] }
+    }
+  }
+}

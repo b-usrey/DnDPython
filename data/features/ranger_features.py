@@ -400,3 +400,28 @@ class ShadowyDodge(Feature):
             return
         attack.disadvantage = True
         print(f"  {self.owner.name}: Shadowy Dodge — imposing disadvantage!")
+
+
+# ---------------------------------------------------------------------------
+# Non-combat stubs — required so feature names resolve in ranger.json
+# ---------------------------------------------------------------------------
+
+class DeftExplorer(Feature):
+    """Lv1/lv6/lv10 Deft Explorer improvements (languages, skills, terrain). Non-combat stub."""
+    name = "Deft Explorer"
+
+class PretermaturalAwareness(Feature):
+    """Lv3: detect invisible/hidden creatures in 30ft. Non-combat stub."""
+    name = "Preternatural Awareness"
+
+class Tireless(Feature):
+    """Lv9: reduce exhaustion and gain temp HP on short rest. Non-combat stub."""
+    name = "Tireless"
+
+class Vanish(Feature):
+    """Lv14: Hide as a bonus action; can't be tracked by non-magical means. Non-combat stub."""
+    name = "Vanish"
+
+class UmbralSight(Feature):
+    """Gloom Stalker lv3: darkvision 60ft (or +30ft); invisible to darkvision. Non-combat stub."""
+    name = "Umbral Sight"

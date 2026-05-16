@@ -14,9 +14,8 @@ class ScenarioLoader:
 
         # Load player characters
         for pdata in scenario_data.get("players", []):
-            features = []
-            if 'features' in pdata:
-                features = pdata['features']
+            # Accept both "features" (CLI builder) and "feats" (web builder)
+            features = pdata.get("features") or pdata.get("feats") or []
             pc = PlayerCharacter(
                 pdata["name"],
                 pdata["classes"],
@@ -26,6 +25,9 @@ class ScenarioLoader:
                 pdata.get("choices", []),
                 feats=features
             )
+            # Apply racial speed if exported (web builder sets player.speed)
+            if "speed" in pdata:
+                pc.speed = pdata["speed"]
             # Load and equip items
             for item_name in pdata.get("items", []):
                 item = load_item_json(item_name)

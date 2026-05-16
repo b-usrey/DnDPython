@@ -1,0 +1,70 @@
+{
+  "class_name": "Rogue",
+  "hit_die": 8,
+  "primary_abilities": ["Dexterity"],
+  "saving_throws": ["Dexterity", "Intelligence"],
+  "armor_proficiencies": ["light"],
+  "weapon_proficiencies": ["simple", "hand crossbows", "longswords", "rapiers", "shortswords"],
+  "tool_proficiencies": ["thieves tools"],
+  "skill_choices": {
+    "choose": 4,
+    "options": [
+      "Acrobatics", "Athletics", "Deception", "Insight",
+      "Intimidation", "Investigation", "Perception", "Performance",
+      "Persuasion", "Sleight of Hand", "Stealth"
+    ]
+  },
+  "multiclassing": {
+    "requirements": { "Dexterity": 13 },
+    "armor_proficiencies": ["light"],
+    "weapon_proficiencies": []
+  },
+  "features_by_level": {
+    "1": [
+      { "name": "Sneak Attack" },
+      { "name": "Expertise", "description": "Double proficiency on 2 skills. Non-combat." },
+      { "name": "Thieves Cant", "description": "Secret language. Non-combat." }
+    ],
+    "2": [
+      { "name": "Cunning Action" }
+    ],
+    "3": [
+      {
+        "name": "Roguish Archetype",
+        "options": ["Thief", "Assassin", "Arcane Trickster"]
+      }
+    ],
+    "4":  [ { "name": "ASI" } ],
+    "5":  [ { "name": "Uncanny Dodge" } ],
+    "6":  [ { "name": "Expertise", "description": "Second expertise improvement. Non-combat." } ],
+    "7":  [ { "name": "Evasion" } ],
+    "8":  [ { "name": "ASI" } ],
+    "10": [ { "name": "ASI" } ],
+    "11": [ { "name": "Reliable Talent", "description": "Min 10 on proficient checks. Non-combat." } ],
+    "12": [ { "name": "ASI" } ],
+    "14": [ { "name": "Blindsense", "description": "Hear invisible creatures. Non-combat." } ],
+    "15": [ { "name": "Slippery Mind" } ],
+    "16": [ { "name": "ASI" } ],
+    "18": [ { "name": "Elusive" } ],
+    "19": [ { "name": "ASI" } ],
+    "20": [ { "name": "Stroke of Luck" } ]
+  },
+  "subclasses": {
+    "assassin": {
+      "features_by_level": {
+        "3":  [ { "name": "Assassinate" } ],
+        "9":  [ { "name": "Infiltration Expertise", "description": "Create false identities. Non-combat." } ],
+        "13": [ { "name": "Impostor", "description": "Impersonate others. Non-combat." } ],
+        "17": [ { "name": "Death Strike" } ]
+      }
+    },
+    "thief": {
+      "features_by_level": {
+        "3":  [ { "name": "Fast Hands", "description": "Bonus action: use object, pickpocket, etc. Simplified." } ],
+        "9":  [ { "name": "Supreme Sneak" } ],
+        "13": [ { "name": "Use Magic Device", "description": "Use any magic item. Non-combat." } ],
+        "17": [ { "name": "Thief's Reflexes" } ]
+      }
+    }
+  }
+}

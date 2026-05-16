@@ -329,3 +329,240 @@ def get_monster(name: str):
     if key not in MONSTER_REGISTRY:
         raise HTTPException(status_code=404, detail=f"Monster '{name}' not found.")
     return MONSTER_REGISTRY[key]
+
+
+# ── Character-builder helpers ─────────────────────────────────────────────────
+
+@app.get("/classes", summary="List all available classes")
+def list_classes():
+    """
+    Returns a summary of every class JSON found in data/classes/.
+    Includes hit die, saving throws, and available subclasses.
+    """
+    classes_dir = ROOT / "data" / "classes"
+    results = []
+    for path in sorted(classes_dir.glob("*.json")):
+        with open(path) as f:
+            data = json.load(f)
+        results.append({
+            "name":           data["class_name"],
+            "hit_die":        data["hit_die"],
+            "saving_throws":  data.get("saving_throws", []),
+            "armor_profs":    data.get("armor_proficiencies", []),
+            "weapon_profs":   data.get("weapon_proficiencies", []),
+            "subclasses":     list(data.get("subclasses", {}).keys()),
+            "features_by_level": {
+                lvl: [f["name"] for f in feats]
+                for lvl, feats in data.get("features_by_level", {}).items()
+            },
+        })
+    return {"classes": results}
+
+
+@app.get("/classes/{name}", summary="Get full class data")
+def get_class(name: str):
+    """Returns the complete JSON for one class (features, subclasses, spellcasting)."""
+    path = ROOT / "data" / "classes" / f"{name.lower()}.json"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"Class '{name}' not found.")
+    with open(path) as f:
+        return json.load(f)
+
+
+@app.get("/items", summary="List all available items")
+def list_items():
+    """
+    Returns items.json grouped by type: weapons, armor, trinkets.
+    Each weapon entry includes damage_die, ability, attack_type, and properties.
+    """
+    items_path = ROOT / "data" / "items.json"
+    with open(items_path) as f:
+        raw = json.load(f)
+
+    weapons, armor, trinkets = [], [], []
+    for key, item in raw.items():
+        if key == "comment":
+            continue
+        t = item.get("type", "")
+        if t == "weapon":
+            weapons.append({
+                "name":        item["name"],
+                "damage_die":  item.get("damage_die"),
+                "damage_type": item.get("damageType"),
+                "ability":     item.get("ability"),
+                "attack_type": item.get("attack_type"),
+                "range":       f"{item.get('normal_range',5)}/{item.get('long_range',5)}",
+                "properties":  item.get("properties", []),
+                "attack_bonus": item.get("attack_bonus", 0),
+                "damage_bonus": item.get("damage_bonus", 0),
+            })
+        elif t == "armor":
+            weapons_or_armor = armor
+            armor.append({
+                "name":       item["name"],
+                "base_ac":    item.get("base_ac"),
+                "armor_type": item.get("armor_type"),
+                "magic_bonus": item.get("magic_bonus", 0),
+            })
+        elif t == "trinket":
+            trinkets.append({
+                "name":    item["name"],
+                "feature": item.get("feature"),
+                "description": item.get("description", ""),
+            })
+
+    return {"weapons": weapons, "armor": armor, "trinkets": trinkets}
+
+
+@app.get("/features", summary="List available feats and features")
+def list_features():
+    """
+    Returns the names of all registered Feature subclasses.
+    These can be added to a character via the 'features' array in a scenario.
+    """
+    from data.features.base import Feature
+    # Filter to standalone feats (exclude pure class features that need class levels)
+    _CLASS_ONLY = {
+        "Rage", "Reckless Attack", "Danger Sense", "Extra Attack", "Extra Attack II",
+        "Extra Attack III", "Fast Movement", "Feral Instinct", "Brutal Critical",
+        "Brutal Critical II", "Brutal Critical III", "Relentless Rage",
+        "Persistent Rage", "Primal Champion", "Frenzy", "Mindless Rage",
+        "Retaliation", "Bear Totem Spirit", "Lay on Hands", "Divine Smite",
+        "Aura of Protection", "Aura of Courage", "Improved Divine Smite",
+        "Sacred Weapon", "Vow of Enmity", "Soul of Vengeance",
+        "Sneak Attack", "Cunning Action", "Uncanny Dodge", "Evasion",
+        "Slippery Mind", "Elusive", "Stroke of Luck", "Assassinate", "Death Strike",
+        "Eldritch Blast", "Pact Magic", "Agonizing Blast", "Repelling Blast", "Hex",
+        "Dark One's Blessing", "Fiendish Resilience", "Second Wind", "Action Surge",
+        "Action Surge II", "Indomitable", "Indomitable II", "Indomitable III",
+        "Improved Critical", "Superior Critical", "Survivor",
+        "Favored Foe", "Roving", "Feral Senses", "Foe Slayer",
+        "Dread Ambusher", "Iron Mind", "Stalker's Flurry", "Shadowy Dodge",
+        "Nature's Veil", "Land's Stride",
+    }
+    all_names = sorted(Feature.REGISTRY.keys())
+    standalone = [n for n in all_names if n not in _CLASS_ONLY
+                  and not n.startswith("ASI")]
+    return {
+        "all_features":        all_names,
+        "standalone_feats":    standalone,
+    }
+
+
+# ── Scenario management ───────────────────────────────────────────────────────
+
+class SaveScenarioRequest(BaseModel):
+    scenario:  dict[str, Any]
+    filename:  str                   # e.g. "gornak_vs_goblins.json"
+    overwrite: bool = False
+
+
+class SaveScenarioResponse(BaseModel):
+    saved:    bool
+    filename: str
+    path:     str
+
+
+@app.post("/scenarios", response_model=SaveScenarioResponse, summary="Save a scenario to disk")
+def save_scenario(req: SaveScenarioRequest):
+    """
+    Save a scenario dict as a JSON file in scenarios/.
+    The saved file can then be referenced by name in /simulate requests.
+
+    Set overwrite=true to replace an existing file.
+    """
+    if not req.filename.endswith(".json"):
+        req.filename += ".json"
+
+    # Basic validation
+    sc = req.scenario
+    if "players" not in sc or "monsters" not in sc:
+        raise HTTPException(
+            status_code=422,
+            detail="Scenario must contain 'players' and 'monsters' keys."
+        )
+
+    out_path = ROOT / "scenarios" / req.filename
+    if out_path.exists() and not req.overwrite:
+        raise HTTPException(
+            status_code=409,
+            detail=f"'{req.filename}' already exists. Set overwrite=true to replace it."
+        )
+
+    out_path.write_text(json.dumps(sc, indent=2))
+    return SaveScenarioResponse(
+        saved=True,
+        filename=req.filename,
+        path=str(out_path),
+    )
+
+
+@app.delete("/scenarios/{filename}", summary="Delete a scenario file")
+def delete_scenario(filename: str):
+    """Permanently removes a scenario file from scenarios/."""
+    path = ROOT / "scenarios" / filename
+    if not path.exists():
+        raise HTTPException(status_code=404, detail=f"'{filename}' not found.")
+    path.unlink()
+    return {"deleted": True, "filename": filename}
+
+
+# ── Character validation ──────────────────────────────────────────────────────
+
+class ValidateCharacterRequest(BaseModel):
+    player: dict[str, Any]
+
+
+@app.post("/validate-character", summary="Validate a player definition without running combat")
+def validate_character(req: ValidateCharacterRequest):
+    """
+    Dry-run a player definition through the loader to catch errors
+    (missing items, unknown class/subclass, unrecognised features, etc.)
+    before embedding it in a full scenario.
+
+    Returns warnings and the computed HP/AC if valid.
+    """
+    import io, contextlib
+
+    player = req.player
+    required = ["name", "classes", "stats", "items", "equipped"]
+    missing = [k for k in required if k not in player]
+    if missing:
+        raise HTTPException(
+            status_code=422,
+            detail=f"Player definition missing required keys: {missing}"
+        )
+
+    # Build a minimal test scenario
+    test_scenario = {
+        "map": {"width": 10, "height": 10, "walls": [], "difficult_terrain": []},
+        "positions": {player["name"]: [2, 2], "monsters": [[7, 7]]},
+        "players": [player],
+        "monsters": [{"type": "GOBLIN", "count": 1}],
+    }
+
+    buf = io.StringIO()
+    warnings = []
+    try:
+        with contextlib.redirect_stdout(buf):
+            event   = EventBus()
+            factory = CreatureFactory()
+            loader  = ScenarioLoader(factory, event)
+            players, _ = loader.load(test_scenario)
+            pc = players[0]
+    except Exception as exc:
+        raise HTTPException(status_code=422, detail=f"Failed to load character: {exc}")
+
+    log = buf.getvalue()
+    for line in log.splitlines():
+        if "couldn't find" in line.lower() or "not found" in line.lower():
+            warnings.append(line.strip())
+
+    return {
+        "valid":    True,
+        "warnings": warnings,
+        "hp":       pc.max_hp,
+        "ac":       pc.ac,
+        "features": [f.name for f in pc.features],
+        "log":      log,
+    }

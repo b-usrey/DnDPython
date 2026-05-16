@@ -681,6 +681,9 @@ if __name__ == "__main__":
     plot_p.add_argument("--output",    default=None,
                         help="Save plot to this path instead of showing it")
 
+    # ── build: interactive character + scenario wizard ───────────────────
+    sub.add_parser("build", help="Interactive wizard to create a custom character scenario")
+
     args = parser.parse_args()
 
     # Backwards-compat: if someone runs the old-style
@@ -697,6 +700,10 @@ if __name__ == "__main__":
     start_time = time.perf_counter()
     if args.command == "run":
         main(args)
+    elif args.command == "build":
+        from utils.character_builder import run_builder
+        run_builder()
+        raise SystemExit(0)
     elif args.command == "train":
         run_training(args)
     elif args.command == "eval":
