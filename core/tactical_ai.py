@@ -19,11 +19,15 @@ Tactical priorities (in order):
 """
 
 from __future__ import annotations
+
+import logging
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from core.creature import Creature
     from core.battle_map import BattleMap
+
+_log = logging.getLogger(__name__)
 
 
 # ---------------------------------------------------------------------------
@@ -146,13 +150,17 @@ class TacticalAI:
         of purely individual observation.
         """
         if not creature.is_alive():
+            _log.debug("[%s] %s: skipping turn — dead", creature.team, creature.name)
             return TacticalDecision(skip=True, reason="creature is dead")
 
         if creature.has_condition("incapacitated") or creature.has_condition("unconscious"):
+            _log.info("[%s] %s: skipping turn — %s", creature.team, creature.name,
+                      ", ".join(creature.conditions))
             return TacticalDecision(skip=True, reason=f"creature is {list(creature.conditions)}")
 
         enemies = battle_map.enemies_of(creature)
         if not enemies:
+            _log.debug("[%s] %s: skipping turn — no enemies", creature.team, creature.name)
             return TacticalDecision(skip=True, reason="no enemies on map")
 
         # ── 1. Pick target ─────────────────────────────────────────────
@@ -161,6 +169,7 @@ class TacticalAI:
         # ── 2. Pick weapon ─────────────────────────────────────────────
         weapons = self._get_weapon_profiles(creature)
         if not weapons:
+            _log.info("[%s] %s: skipping turn — no weapons", creature.team, creature.name)
             return TacticalDecision(skip=True, reason="no weapons available")
 
         weapon = self._pick_weapon(creature, target, weapons, battle_map)
@@ -182,8 +191,10 @@ class TacticalAI:
             ]
             obs      = memory.get_state_vector(creature, enemies, allies)
             strategy = self.strategy_selector.select(obs)
+            _log.debug("[%s] %s: ML strategy → %s", creature.team, creature.name, strategy)
         elif self.current_strategy is not None:
             strategy = self.current_strategy
+            _log.debug("[%s] %s: fixed strategy → %s", creature.team, creature.name, strategy)
 
         # ── 4. Decide movement path ────────────────────────────────────
         path = []
@@ -207,6 +218,11 @@ class TacticalAI:
                 )
                 if not range_ok:
                     weapon = None
+                _log.info(
+                    "[%s] %s: RETREAT from %s — hp %.0f%%",
+                    creature.team, creature.name, retreat_from.name,
+                    100 * creature.hp / max(creature.max_hp, 1),
+                )
                 return TacticalDecision(
                     target=target, path=path, weapon=weapon,
                     reason=f"strategy: RETREAT",
@@ -258,6 +274,12 @@ class TacticalAI:
                 )
                 if not range_ok:
                     weapon = None
+                _log.info(
+                    "[%s] %s: DISENGAGE from %s — hp %.0f%% (below %.0f%% threshold)",
+                    creature.team, creature.name, retreat_from.name,
+                    100 * creature.hp / max(creature.max_hp, 1),
+                    100 * self.DISENGAGE_THRESHOLD,
+                )
                 return TacticalDecision(
                     target=target, path=path, weapon=weapon,
                     reason="disengaging — low HP",
@@ -335,6 +357,15 @@ class TacticalAI:
         reason = "standard attack"
         if use_dash:  reason = "dash to close distance"
         if use_dodge: reason = "dodge — can't reach target"
+
+        _log.info(
+            "[%s] %s → target: %s | weapon: %s | action: %s | move: %d steps",
+            creature.team, creature.name,
+            target.name if target else "none",
+            weapon.name if weapon else "none",
+            reason,
+            len(path),
+        )
 
         return TacticalDecision(
             target=target,
@@ -445,7 +476,12 @@ class TacticalAI:
                 return (enemy.hp, dist)   # weakest first, tiebreak closest
             return (dist, enemy.hp)        # closest first, tiebreak weakest
 
-        return min(enemies, key=priority)
+        chosen = min(enemies, key=priority)
+        _log.info(
+            "[%s] %s: no memory — fallback target %s (hp %d/%d)",
+            creature.team, creature.name, chosen.name, chosen.hp, chosen.max_hp,
+        )
+        return chosen
 
     # ------------------------------------------------------------------
     # Weapon selection
@@ -514,6 +550,47 @@ class TacticalAI:
         long = getattr(item, "long_range", 320)
         return normal, long
 
+    def _score_weapon(
+        self,
+        weapon: WeaponProfile,
+        target,
+        dist: float,
+        is_concentrating: bool,
+    ) -> float:
+        """
+        Expected useful DPR for weapon against target, with situational modifiers.
+
+        Base score  = P(hit) × avg_damage
+        Modifiers:
+          - ×1.5 ranged bonus when the creature is concentrating on a spell
+            (staying at range reduces melee hit risk and protects concentration)
+          - ×1.2 ranged bonus when target is beyond melee reach
+        """
+        try:
+            num, sides = weapon.damage_die.split("d")
+            avg = int(num) * (int(sides) + 1) / 2.0 + weapon.damage_mod
+        except (ValueError, AttributeError):
+            avg = 5.0
+        avg = max(avg, 0.0)
+
+        # Advantage from target conditions: paralyzed/restrained/blinded
+        _hc = getattr(target, "has_condition", None)
+        has_advantage = bool(_hc) and (
+            _hc("paralyzed") or _hc("restrained") or _hc("blinded")
+        )
+
+        needed     = target.ac - weapon.attack_bonus
+        p_straight = max(0.05, min(0.95, (21 - max(1, min(20, needed))) / 20.0))
+        p_hit      = (1.0 - (1.0 - p_straight) ** 2) if has_advantage else p_straight
+        score      = p_hit * avg
+
+        if weapon.is_ranged and is_concentrating:
+            score *= 1.5   # protect concentration — stay out of melee
+        if weapon.is_ranged and dist > 5:
+            score *= 1.2   # ranged weapon naturally better at range
+
+        return score
+
     def _pick_weapon(
         self,
         creature: Creature,
@@ -522,20 +599,24 @@ class TacticalAI:
         battle_map: BattleMap,
     ) -> WeaponProfile:
         """
-        Choose the best weapon for the situation.
+        Choose the highest-value weapon for the current situation.
 
-        Preference order:
-          1. Any weapon that can hit the target without disadvantage
-          2. Any weapon that can hit at all (even with disadvantage)
-          3. Fallback to first available weapon
+        Candidates are split into clean (no disadvantage) and dirty (disadvantage)
+        pools; clean always preferred. Within each pool the weapon with the highest
+        _score_weapon value wins, which accounts for:
+          - Expected DPR (P(hit) × average damage vs target AC)
+          - Concentration protection (ranged gets a boost when caster is concentrating)
+          - Range preference (ranged boosted when target is beyond melee reach)
         """
         try:
             dist = battle_map.distance_between(creature, target)
         except LookupError:
             dist = 0
 
-        clean_options = []
-        any_options = []
+        is_concentrating = bool(getattr(creature, "concentration", None))
+
+        clean_options: list[WeaponProfile] = []
+        any_options:   list[WeaponProfile] = []
 
         for w in weapons:
             result = battle_map.check_attack_range(
@@ -549,17 +630,32 @@ class TacticalAI:
             elif result.valid:
                 any_options.append(w)
 
-        if clean_options:
-            # Among clean options, prefer ranged if target is far
-            if dist > 5:
-                ranged = [w for w in clean_options if w.is_ranged]
-                if ranged:
-                    return ranged[0]
-            return clean_options[0]
+        pool = clean_options or any_options
+        cname = getattr(creature, "name", "?")
+        tname = getattr(target,   "name", "?")
+        if pool:
+            scored = [
+                (w, self._score_weapon(w, target, dist, is_concentrating))
+                for w in pool
+            ]
+            _log.debug(
+                "[%s] weapon scores vs %s (dist=%.0fft%s): %s",
+                cname, tname, dist,
+                " [concentrating]" if is_concentrating else "",
+                ", ".join(f"{w.name}={s:.1f}" for w, s in scored),
+            )
+            chosen, best = max(scored, key=lambda x: x[1])
+            _hc = getattr(target, "has_condition", None)
+            adv = _hc and (_hc("paralyzed") or _hc("restrained") or _hc("blinded"))
+            _log.info(
+                "[%s] picks %s (score=%.1f%s) vs %s",
+                cname, chosen.name, best,
+                " [advantage]" if adv else "",
+                tname,
+            )
+            return chosen
 
-        if any_options:
-            return any_options[0]
-
+        _log.debug("[%s] no in-range weapon — falling back to %s", cname, weapons[0].name)
         return weapons[0]   # fallback — CombatManager will handle out-of-range
 
     # ------------------------------------------------------------------

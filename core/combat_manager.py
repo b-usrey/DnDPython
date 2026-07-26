@@ -67,6 +67,12 @@ class CombatManager:
             battle_map, event
         )
         print(f"  [TeamMemory] Tracking teams: {list(self.memories.keys())}")
+        # Wire each creature to its team's memory so features (e.g. _ActionSpell)
+        # can query spell_worthy() and danger_score during TurnStarted events.
+        # Also wire battle_map so AOE spells can search for optimal placement.
+        for _c in battle_map.all_creatures():
+            _c.team_memory = self.memories.get(_c.team)
+            _c.battle_map  = battle_map
 
     def set_mode(self, mode: CombatMode) -> None:
         self.mode = mode
