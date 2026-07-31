@@ -433,7 +433,7 @@ class SoulOfVengeance(Feature):
         if not vow or attacker is not vow._vow_target:
             return
 
-        if not self.owner.is_alive():
+        if not self._owner_can_react():
             return
         if not self.owner.actions.use_reaction():
             return

@@ -176,7 +176,7 @@ class UncannyDodge(Feature):
             return
         if self._used_this_turn:
             return
-        if not self.owner.is_alive():
+        if not self._owner_can_react():
             return
         if not self.owner.actions.use_reaction():
             return

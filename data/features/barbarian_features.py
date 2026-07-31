@@ -436,7 +436,7 @@ class Retaliation(Feature):
             return
         if not attack or not attack.result.get("hit"):
             return
-        if not self.owner.is_alive():
+        if not self._owner_can_react():
             return
         if not self.owner.actions.use_reaction():
             return

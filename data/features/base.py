@@ -57,6 +57,15 @@ class Feature:
             bus.unsubscribe(event, handler)
         self._subscriptions.clear()
 
+    def _owner_can_react(self):
+        """
+        False if the owner is dead or unconscious (including dying — see
+        Creature._start_dying) and therefore can't spend a reaction.
+        Reaction-style features (damage_dealt, attack, hit hooks that spend
+        actions.use_reaction()) should check this before acting.
+        """
+        return self.owner.is_alive() and not self.owner.has_condition("unconscious")
+
 
 
 

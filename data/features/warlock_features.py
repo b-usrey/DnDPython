@@ -404,6 +404,8 @@ class EntropicWard(Feature):
             return
         if self._ward_used:
             return
+        if not self._owner_can_react():
+            return
         if not self.owner.actions.use_reaction():
             return
         self._ward_used = True

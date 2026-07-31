@@ -27,8 +27,8 @@ class HellishRebuke(Feature):
             return
         if not attack or not attack.result.get("hit", False):
             return
-        if not self.owner.is_alive():
-            return   # can't cast if the hit killed us
+        if not self._owner_can_react():
+            return   # can't cast if the hit killed or downed us
         if not self.owner.actions.use_reaction():
             return
 
@@ -108,6 +108,8 @@ class ShieldSpell(Feature):
         if target is not self.owner:
             return
         if not attack:
+            return
+        if not self._owner_can_react():
             return
         if not self.owner.actions.use_reaction():
             return

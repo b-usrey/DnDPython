@@ -333,7 +333,7 @@ class Sentinel(Feature):
             return
         if getattr(target, "team", None) != getattr(self.owner, "team", None):
             return
-        if not self.owner.is_alive():
+        if not self._owner_can_react():
             return
         if not self.owner.actions.use_reaction():
             return

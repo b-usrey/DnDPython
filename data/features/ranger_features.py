@@ -396,6 +396,8 @@ class ShadowyDodge(Feature):
         attack = data.get("attack")
         if target is not self.owner:
             return
+        if not self._owner_can_react():
+            return
         if not self.owner.actions.use_reaction():
             return
         attack.disadvantage = True
