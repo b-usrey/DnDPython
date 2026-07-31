@@ -19,7 +19,7 @@ class ScenarioLoader:
             pc = PlayerCharacter(
                 pdata["name"],
                 pdata["classes"],
-                pdata["subclasses"],
+                pdata.get("subclasses", {}),
                 pdata["stats"],
                 self.event,
                 pdata.get("choices", []),

@@ -52,8 +52,8 @@ class PlayerCharacter(Creature):
         file_path = os.path.join(data_folder,f"{class_name.lower()}.json")
         with open(file_path) as f:
             class_data = json.load(f)
+        subclass_data = None
         if sub_class:
-            subclass_data = None
             if sub_class.replace(" ","").lower() in class_data['subclasses']:
                 subclass_data = class_data['subclasses'][sub_class.replace(" ","").lower()]
             else:
