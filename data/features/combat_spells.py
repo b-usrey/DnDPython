@@ -28,7 +28,7 @@ Combat-relevant SRD spells for all spellcasting classes.
 
 ── Action damage spells: 3rd–5th level ──────────────────────────────────────
   Fireball          Wizard/Sorc.  DEX save, 8d6 fire (+ 1d6/upcast)
-  LightningBolt     Wizard/Sorc.  DEX save, 8d6 lightning (+ 1d6/upcast)
+  LightningBolt     Wizard/Sorc.  DEX save, 8d6 lightning (+ 1d6/upcast), 100×5ft line
   Blight            Cleric/Druid  CON save, 8d8 necrotic (no upcast; single target)
   ConeOfCold        Wizard        CON save, 8d8 cold (+ 1d8/upcast)
   FlameStrike       Cleric        DEX save, 4d6 fire + 4d6 radiant (+ 1d6/upcast)
@@ -51,10 +51,14 @@ Combat-relevant SRD spells for all spellcasting classes.
 ── Banishment ────────────────────────────────────────────────────────────────
   Banishment        Cleric/Paladin CHA save; target incapacitated while conc. holds
 """
+import logging
+import math
 import random
 from data.features.base import Feature
 from core.saving_throw import SavingThrow, DamageOnSave
 from core.item import Item
+
+_log = logging.getLogger(__name__)
 
 
 # ── Module-level helpers ─────────────────────────────────────────────────────
@@ -123,6 +127,53 @@ def _make_spell_weapon(owner, name, damage_die, damage_type,
     return item
 
 
+# ── AOE helper ────────────────────────────────────────────────────────────────
+
+def _creatures_in_aoe(creatures: list, center: tuple, radius_sq: int) -> list:
+    """
+    Return creatures whose grid position falls within radius_sq squares
+    (Chebyshev distance) of center.  Creatures with no pos are skipped.
+    """
+    result = []
+    for c in creatures:
+        pos = getattr(c, "pos", None)
+        if pos and max(abs(pos[0] - center[0]), abs(pos[1] - center[1])) <= radius_sq:
+            result.append(c)
+    return result
+
+
+def _creatures_in_line(creatures: list, origin: tuple, end: tuple, half_width_sq: float) -> list:
+    """
+    Return creatures within half_width_sq squares of the line segment
+    origin→end (perpendicular distance), excluding anything behind origin.
+
+    Used for line-shaped spells (Lightning Bolt) where a fixed-radius
+    center point doesn't apply — the AOE is a directed segment instead.
+    """
+    ox, oy = origin
+    ex, ey = end
+    dx, dy = ex - ox, ey - oy
+    seg_len_sq = dx * dx + dy * dy
+    if seg_len_sq == 0:
+        return []
+
+    result = []
+    for c in creatures:
+        pos = getattr(c, "pos", None)
+        if not pos:
+            continue
+        px, py = pos
+        t = ((px - ox) * dx + (py - oy) * dy) / seg_len_sq
+        if t < 0:
+            continue   # behind the caster
+        t_clamped = min(1.0, t)
+        cx = ox + t_clamped * dx
+        cy = oy + t_clamped * dy
+        if math.hypot(px - cx, py - cy) <= half_width_sq:
+            result.append(c)
+    return result
+
+
 # ── _ActionSpell base — action-cost spells with last-target tracking ──────────
 
 class _ActionSpell(Feature):
@@ -176,6 +227,12 @@ class _ActionSpell(Feature):
             # Defer if a higher-tier spell is also loaded on this creature
             if slots.has_slot(self.MIN_SLOT_TO_DEFER):
                 return
+            # Threat-aware gate: don't burn a slot on a target that doesn't
+            # merit it (e.g. nearly-dead goblin, Fireball overkill).
+            # Skipped when no team_memory is available (graceful fallback).
+            memory = getattr(creature, "team_memory", None)
+            if memory and not memory.spell_worthy(self.SLOT_LEVEL, target):
+                return
 
         if not creature.actions.use_action():
             return
@@ -192,6 +249,293 @@ class _ActionSpell(Feature):
     def _cast(self, caster, target, slot_level: int):
         """Override in each spell subclass."""
         raise NotImplementedError
+
+
+# ── _AoESpell — action-cost spells that hit an area ──────────────────────────
+
+class _AoESpell(_ActionSpell):
+    """
+    Extension of _ActionSpell for spells that affect an area.
+
+    Before spending a slot the spell scans the battle map and finds the
+    optimal center point for the AOE.  Two configurable class attributes
+    gate whether the spell fires at all:
+
+      FRIENDLY_FIRE_MAX  (float 0–1)
+          Maximum ratio of expected-ally-damage to total expected damage.
+          0.0 = never clip an ally.  0.25 = OK if ≤25 % of expected damage
+          goes to friendlies.
+
+      MIN_ENEMIES_HIT  (int)
+          Minimum number of enemies that must be caught.  Auto-relaxed to
+          min(MIN_ENEMIES_HIT, len(all_alive_enemies)) so a 1v1 situation
+          never locks the spell out entirely.
+
+    The placement is chosen by maximising:
+        Σ min(enemy.hp, expected_dmg_i)
+      − FRIENDLY_PENALTY × Σ min(ally.hp, expected_dmg_j)
+
+    where expected_dmg accounts for the target's saving-throw modifier.
+    If no center produces a positive score the spell does not fire.
+
+    Shape variants:
+      SHAPE = "burst" (default) — a radius/cube/cone approximated as a
+              Chebyshev-distance circle around a chosen center point.
+        SELF_CENTERED = False — caster chooses a point in range
+        SELF_CENTERED = True  — center is always the caster
+                                (Thunderwave, Burning Hands)
+      SHAPE = "line" — a directed segment from the caster outward
+              (Lightning Bolt). Candidate directions are aimed through
+              each living enemy and extended to LINE_LENGTH_FT; width is
+              LINE_WIDTH_FT. Always originates at the caster.
+    """
+
+    RADIUS_FT         = 20     # burst shape: AOE radius in feet
+    CAST_RANGE_FT     = 150    # burst shape: max distance from caster to AOE center
+    SAVE_ABILITY      = "Dex"  # ability for saving throws against this spell
+    SELF_CENTERED     = False  # burst shape: True = center locked to caster position
+    MIN_ENEMIES_HIT   = 2      # minimum enemies that must be caught
+    FRIENDLY_FIRE_MAX = 0.0    # max ally_dmg / total_dmg ratio
+    FRIENDLY_PENALTY  = 2.0    # score penalty multiplier for ally damage
+
+    SHAPE             = "burst"  # "burst" or "line"
+    LINE_LENGTH_FT    = 100     # line shape: max segment length
+    LINE_WIDTH_FT     = 5       # line shape: segment width
+
+    # ------------------------------------------------------------------
+    # Turn entry point (replaces _ActionSpell.on_turn_started)
+    # ------------------------------------------------------------------
+
+    def on_turn_started(self, ctx):
+        creature = ctx.get("creature")
+        if creature is not self.owner:
+            return
+
+        slots = getattr(creature, "spell_slots", None)
+        if not (slots and slots.has_slot(self.SLOT_LEVEL)):
+            return
+        if slots.has_slot(self.MIN_SLOT_TO_DEFER):
+            return
+
+        battle_map = getattr(creature, "battle_map", None)
+
+        if battle_map is None:
+            # No map reference — fall back to single-target via _last_target
+            target = self._last_target
+            if not (target and target.is_alive()):
+                return
+            memory = getattr(creature, "team_memory", None)
+            if memory and not memory.spell_worthy(self.SLOT_LEVEL, target):
+                return
+            if not creature.actions.use_action():
+                return
+            lvl = slots.spend_slot(self.SLOT_LEVEL)
+            if lvl is None:
+                creature.actions.actions += 1
+                return
+            self._cast_aoe(creature, [target], [], lvl)
+            return
+
+        placement = self._find_best_placement(creature, battle_map)
+        if placement is None:
+            _log.info(
+                "[%s] %s: no valid AOE placement — skipping %s",
+                creature.team, creature.name, self.name,
+            )
+            return
+
+        enemies_hit, allies_hit = placement
+        _log.info(
+            "[%s] %s: casting %s — hits %s%s",
+            creature.team, creature.name, self.name,
+            ", ".join(e.name for e in enemies_hit),
+            f" (also clips {', '.join(a.name for a in allies_hit)})" if allies_hit else "",
+        )
+        if not creature.actions.use_action():
+            return
+
+        lvl = slots.spend_slot(self.SLOT_LEVEL)
+        if lvl is None:
+            creature.actions.actions += 1
+            return
+
+        self._cast_aoe(creature, enemies_hit, allies_hit, lvl)
+
+    # ------------------------------------------------------------------
+    # Placement search
+    # ------------------------------------------------------------------
+
+    def _find_best_placement(self, caster, battle_map):
+        """
+        Return (enemies_list, allies_list) for the optimal AOE placement,
+        or None if no valid placement exists.
+        """
+        caster_pos = battle_map.get_position(caster)
+        if not caster_pos:
+            return None
+
+        all_enemies = [e for e in battle_map.enemies_of(caster) if e.is_alive()]
+        all_allies  = [c for c in battle_map.all_creatures()
+                       if c.team == caster.team and c is not caster and c.is_alive()]
+
+        if not all_enemies:
+            return None
+
+        # Relax minimum so a solo-enemy fight is never locked out
+        effective_min = min(self.MIN_ENEMIES_HIT, len(all_enemies))
+        avg_dmg       = self._avg_damage_at(self.SLOT_LEVEL)
+
+        if self.SHAPE == "line":
+            placements = self._line_placements(caster_pos, all_enemies, all_allies)
+        else:
+            placements = self._burst_placements(
+                caster_pos, battle_map, all_enemies, all_allies
+            )
+
+        best_score  = 0.0   # must exceed 0 to justify burning a slot
+        best_result = None
+
+        for enemies_caught, allies_caught in placements:
+            if len(enemies_caught) < effective_min:
+                continue
+
+            enemy_dmg = sum(
+                min(e.hp, self._expected_dmg(caster, e, avg_dmg))
+                for e in enemies_caught
+            )
+            ally_dmg = sum(
+                min(a.hp, self._expected_dmg(caster, a, avg_dmg))
+                for a in allies_caught
+            )
+
+            # Friendly-fire ratio gate
+            total_dmg = enemy_dmg + ally_dmg
+            if total_dmg > 0 and ally_dmg / total_dmg > self.FRIENDLY_FIRE_MAX:
+                _log.debug(
+                    "[%s] %s: placement rejected — friendly fire %.0f%% > max %.0f%%",
+                    caster.team, caster.name,
+                    100 * ally_dmg / total_dmg, 100 * self.FRIENDLY_FIRE_MAX,
+                )
+                continue
+
+            score = enemy_dmg - self.FRIENDLY_PENALTY * ally_dmg
+            _log.debug(
+                "[%s] %s: placement hits %d enemies (edamg=%.1f) %d allies (adamg=%.1f) → score=%.1f",
+                caster.team, caster.name,
+                len(enemies_caught), enemy_dmg,
+                len(allies_caught),  ally_dmg,
+                score,
+            )
+            if score > best_score:
+                best_score  = score
+                best_result = (enemies_caught, allies_caught)
+
+        if best_result:
+            _log.debug(
+                "[%s] %s: best placement score=%.1f for %s",
+                caster.team, caster.name, best_score, self.name,
+            )
+        return best_result
+
+    def _burst_placements(self, caster_pos, battle_map, all_enemies, all_allies):
+        """
+        Yield (enemies_caught, allies_caught) for each candidate burst center.
+        """
+        radius_sq = self.RADIUS_FT // 5
+
+        if self.SELF_CENTERED:
+            centers = [caster_pos]
+        else:
+            cast_range_sq = self.CAST_RANGE_FT // 5
+            # Candidate centers: squares near each enemy and within cast range.
+            # Searching near enemies only (vs. full grid) keeps this O(E × r²).
+            raw: set = set()
+            for e in all_enemies:
+                epos = getattr(e, "pos", None)
+                if not epos:
+                    continue
+                for dc in range(-radius_sq, radius_sq + 1):
+                    for dr in range(-radius_sq, radius_sq + 1):
+                        cp = (epos[0] + dc, epos[1] + dr)
+                        if not battle_map._in_bounds(*cp):
+                            continue
+                        if max(abs(cp[0] - caster_pos[0]),
+                               abs(cp[1] - caster_pos[1])) <= cast_range_sq:
+                            raw.add(cp)
+            centers = list(raw)
+
+        for center in centers:
+            yield (
+                _creatures_in_aoe(all_enemies, center, radius_sq),
+                _creatures_in_aoe(all_allies,  center, radius_sq),
+            )
+
+    def _line_placements(self, caster_pos, all_enemies, all_allies):
+        """
+        Yield (enemies_caught, allies_caught) for each candidate line direction.
+
+        A line always originates at the caster and travels its full length,
+        unlike a burst which can be centered anywhere. Candidate directions
+        are aimed straight through each living enemy's square (one line per
+        distinct direction) — the natural set of "point the bolt here"
+        choices, same O(E) spirit as the burst search staying near enemies.
+        """
+        length_sq     = self.LINE_LENGTH_FT / 5.0
+        half_width_sq = (self.LINE_WIDTH_FT / 5.0) / 2.0
+
+        seen_dirs: set = set()
+        for e in all_enemies:
+            epos = getattr(e, "pos", None)
+            if not epos or epos == caster_pos:
+                continue
+            dx, dy = epos[0] - caster_pos[0], epos[1] - caster_pos[1]
+            dist = math.hypot(dx, dy)
+            if dist == 0:
+                continue
+            ux, uy = dx / dist, dy / dist
+            key = (round(ux, 2), round(uy, 2))
+            if key in seen_dirs:
+                continue
+            seen_dirs.add(key)
+
+            end = (caster_pos[0] + ux * length_sq, caster_pos[1] + uy * length_sq)
+            yield (
+                _creatures_in_line(all_enemies, caster_pos, end, half_width_sq),
+                _creatures_in_line(all_allies,  caster_pos, end, half_width_sq),
+            )
+
+    # ------------------------------------------------------------------
+    # Damage estimation helpers
+    # ------------------------------------------------------------------
+
+    def _avg_damage_at(self, slot_level: int) -> float:
+        """Average damage at the given slot level. Override per spell."""
+        return 28.0  # Fireball default: 8d6 = 28
+
+    def _expected_dmg(self, caster, target, avg_dmg: float) -> float:
+        """
+        Expected damage to one target after the saving throw.
+        Half-on-save formula: E = avg × (1 − 0.5 × p_save).
+        Uses the target's relevant ability modifier as a rough save bonus.
+        """
+        dc  = _spell_dc(caster)
+        mod = getattr(
+            getattr(target, "statblock", None), "mods", {}
+        ).get(self.SAVE_ABILITY, 0)
+        p_save = max(0.05, min(0.95, (21 - dc + mod) / 20.0))
+        return avg_dmg * (1.0 - 0.5 * p_save)
+
+    # ------------------------------------------------------------------
+    # Abstract / fallback
+    # ------------------------------------------------------------------
+
+    def _cast_aoe(self, caster, targets: list, allies: list, slot_level: int):
+        """Override in each AOE spell. targets = enemies caught; allies = friendlies caught."""
+        raise NotImplementedError
+
+    def _cast(self, caster, target, slot_level):
+        """Single-target fallback (used when battle_map is unavailable)."""
+        self._cast_aoe(caster, [target], [], slot_level)
 
 
 # ── Pseudo-weapon cantrips ────────────────────────────────────────────────────
@@ -497,40 +841,64 @@ class MagicMissile(_ActionSpell):
         print(f"  {caster.name}: Magic Missile! ({n_darts} darts, {total} force — auto-hit)")
 
 
-class BurningHands(_ActionSpell):
-    """1st-level. DEX save, 3d6 fire (+ 1d6/upcast). Cone — single target in sim."""
+class BurningHands(_AoESpell):
+    """1st-level. DEX save, 3d6 fire (+ 1d6/upcast). 15ft cone from caster."""
     name              = "Burning Hands"
     SLOT_LEVEL        = 1
     MIN_SLOT_TO_DEFER = 3
+    SELF_CENTERED     = True   # cone emanates from caster
+    RADIUS_FT         = 15
+    SAVE_ABILITY      = "Dex"
+    MIN_ENEMIES_HIT   = 1      # frontline spell — use even on a single target
 
-    def _cast(self, caster, target, slot_level):
+    def _avg_damage_at(self, slot_level):
+        return (3 + (slot_level - 1)) * 3.5
+
+    def _cast_aoe(self, caster, targets, allies, slot_level):
         n   = 3 + (slot_level - 1)
         dmg = sum(random.randint(1, 6) for _ in range(n))
-        SavingThrow.roll(
-            caster=caster, target=target,
-            ability="Dex", dc=_spell_dc(caster),
-            on_save=DamageOnSave.HALF,
-            damage=dmg, damage_type="fire",
-        )
-        print(f"  {caster.name}: Burning Hands! ({n}d6 fire, DC {_spell_dc(caster)})")
+        dc  = _spell_dc(caster)
+        all_hit = targets + allies
+        print(f"  {caster.name}: Burning Hands! ({n}d6={dmg} fire, DC {dc})"
+              f" — {len(targets)} target{'s' if len(targets)!=1 else ''}"
+              + (f", {len(allies)} allied" if allies else ""))
+        for t in all_hit:
+            SavingThrow.roll(
+                caster=caster, target=t,
+                ability="Dex", dc=dc,
+                on_save=DamageOnSave.HALF,
+                damage=dmg, damage_type="fire",
+            )
 
 
-class Thunderwave(_ActionSpell):
-    """1st-level. STR save, 2d8 thunder (+ 1d8/upcast). AoE — primary target in sim."""
+class Thunderwave(_AoESpell):
+    """1st-level. STR save, 2d8 thunder (+ 1d8/upcast). 15ft cube from caster."""
     name              = "Thunderwave"
     SLOT_LEVEL        = 1
     MIN_SLOT_TO_DEFER = 3
+    SELF_CENTERED     = True   # cube originates from caster
+    RADIUS_FT         = 15
+    SAVE_ABILITY      = "Str"
+    MIN_ENEMIES_HIT   = 1
 
-    def _cast(self, caster, target, slot_level):
+    def _avg_damage_at(self, slot_level):
+        return (2 + (slot_level - 1)) * 4.5  # d8 avg = 4.5
+
+    def _cast_aoe(self, caster, targets, allies, slot_level):
         n   = 2 + (slot_level - 1)
         dmg = sum(random.randint(1, 8) for _ in range(n))
-        SavingThrow.roll(
-            caster=caster, target=target,
-            ability="Str", dc=_spell_dc(caster),
-            on_save=DamageOnSave.HALF,
-            damage=dmg, damage_type="thunder",
-        )
-        print(f"  {caster.name}: Thunderwave! ({n}d8 thunder, DC {_spell_dc(caster)})")
+        dc  = _spell_dc(caster)
+        all_hit = targets + allies
+        print(f"  {caster.name}: Thunderwave! ({n}d8={dmg} thunder, DC {dc})"
+              f" — {len(targets)} target{'s' if len(targets)!=1 else ''}"
+              + (f", {len(allies)} allied" if allies else ""))
+        for t in all_hit:
+            SavingThrow.roll(
+                caster=caster, target=t,
+                ability="Str", dc=dc,
+                on_save=DamageOnSave.HALF,
+                damage=dmg, damage_type="thunder",
+            )
 
 
 class ScorchingRay(_ActionSpell):
@@ -559,38 +927,63 @@ class ScorchingRay(_ActionSpell):
 
 # ── Action damage spells: 3rd–5th level ──────────────────────────────────────
 
-class Fireball(_ActionSpell):
-    """3rd-level. DEX save, 8d6 fire (+ 1d6/upcast). AoE — primary target in sim."""
-    name       = "Fireball"
-    SLOT_LEVEL = 3
+class Fireball(_AoESpell):
+    """3rd-level. DEX save, 8d6 fire (+ 1d6/upcast). 20ft radius sphere, 150ft range."""
+    name          = "Fireball"
+    SLOT_LEVEL    = 3
+    RADIUS_FT     = 20
+    CAST_RANGE_FT = 150
+    SAVE_ABILITY  = "Dex"
+    MIN_ENEMIES_HIT = 2
 
-    def _cast(self, caster, target, slot_level):
+    def _avg_damage_at(self, slot_level):
+        return (8 + (slot_level - 3)) * 3.5  # d6 avg = 3.5
+
+    def _cast_aoe(self, caster, targets, allies, slot_level):
         n   = 8 + (slot_level - 3)
         dmg = sum(random.randint(1, 6) for _ in range(n))
-        SavingThrow.roll(
-            caster=caster, target=target,
-            ability="Dex", dc=_spell_dc(caster),
-            on_save=DamageOnSave.HALF,
-            damage=dmg, damage_type="fire",
-        )
-        print(f"  {caster.name}: Fireball! ({n}d6 fire, DC {_spell_dc(caster)})")
+        dc  = _spell_dc(caster)
+        all_hit = targets + allies
+        print(f"  {caster.name}: Fireball! ({n}d6={dmg} fire, DC {dc})"
+              f" — {len(targets)} enem{'y' if len(targets)==1 else 'ies'}"
+              + (f", {len(allies)} allied" if allies else ""))
+        for t in all_hit:
+            SavingThrow.roll(
+                caster=caster, target=t,
+                ability="Dex", dc=dc,
+                on_save=DamageOnSave.HALF,
+                damage=dmg, damage_type="fire",
+            )
 
 
-class LightningBolt(_ActionSpell):
-    """3rd-level. DEX save, 8d6 lightning (+ 1d6/upcast). Line — primary target in sim."""
-    name       = "Lightning Bolt"
-    SLOT_LEVEL = 3
+class LightningBolt(_AoESpell):
+    """3rd-level. DEX save, 8d6 lightning (+ 1d6/upcast). 100ft × 5ft line from caster."""
+    name           = "Lightning Bolt"
+    SLOT_LEVEL     = 3
+    SHAPE          = "line"
+    LINE_LENGTH_FT = 100
+    LINE_WIDTH_FT  = 5
+    SAVE_ABILITY   = "Dex"
+    MIN_ENEMIES_HIT = 2
 
-    def _cast(self, caster, target, slot_level):
+    def _avg_damage_at(self, slot_level):
+        return (8 + (slot_level - 3)) * 3.5  # d6 avg = 3.5
+
+    def _cast_aoe(self, caster, targets, allies, slot_level):
         n   = 8 + (slot_level - 3)
         dmg = sum(random.randint(1, 6) for _ in range(n))
-        SavingThrow.roll(
-            caster=caster, target=target,
-            ability="Dex", dc=_spell_dc(caster),
-            on_save=DamageOnSave.HALF,
-            damage=dmg, damage_type="lightning",
-        )
-        print(f"  {caster.name}: Lightning Bolt! ({n}d6 lightning, DC {_spell_dc(caster)})")
+        dc  = _spell_dc(caster)
+        all_hit = targets + allies
+        print(f"  {caster.name}: Lightning Bolt! ({n}d6={dmg} lightning, DC {dc})"
+              f" — {len(targets)} enem{'y' if len(targets)==1 else 'ies'}"
+              + (f", {len(allies)} allied" if allies else ""))
+        for t in all_hit:
+            SavingThrow.roll(
+                caster=caster, target=t,
+                ability="Dex", dc=dc,
+                on_save=DamageOnSave.HALF,
+                damage=dmg, damage_type="lightning",
+            )
 
 
 class Blight(_ActionSpell):
@@ -609,40 +1002,64 @@ class Blight(_ActionSpell):
         print(f"  {caster.name}: Blight! (8d8 necrotic, DC {_spell_dc(caster)})")
 
 
-class ConeOfCold(_ActionSpell):
-    """5th-level. CON save, 8d8 cold (+ 1d8/upcast). Cone — primary target in sim."""
-    name       = "Cone of Cold"
-    SLOT_LEVEL = 5
+class ConeOfCold(_AoESpell):
+    """5th-level. CON save, 8d8 cold (+ 1d8/upcast). 60ft cone — modelled as 30ft radius."""
+    name          = "Cone of Cold"
+    SLOT_LEVEL    = 5
+    RADIUS_FT     = 30     # 60ft cone approximated as 30ft sphere
+    CAST_RANGE_FT = 60
+    SAVE_ABILITY  = "Con"
+    MIN_ENEMIES_HIT = 2
 
-    def _cast(self, caster, target, slot_level):
+    def _avg_damage_at(self, slot_level):
+        return (8 + (slot_level - 5)) * 4.5  # d8 avg = 4.5
+
+    def _cast_aoe(self, caster, targets, allies, slot_level):
         n   = 8 + (slot_level - 5)
         dmg = sum(random.randint(1, 8) for _ in range(n))
-        SavingThrow.roll(
-            caster=caster, target=target,
-            ability="Con", dc=_spell_dc(caster),
-            on_save=DamageOnSave.HALF,
-            damage=dmg, damage_type="cold",
-        )
-        print(f"  {caster.name}: Cone of Cold! ({n}d8 cold, DC {_spell_dc(caster)})")
+        dc  = _spell_dc(caster)
+        all_hit = targets + allies
+        print(f"  {caster.name}: Cone of Cold! ({n}d8={dmg} cold, DC {dc})"
+              f" — {len(targets)} enem{'y' if len(targets)==1 else 'ies'}"
+              + (f", {len(allies)} allied" if allies else ""))
+        for t in all_hit:
+            SavingThrow.roll(
+                caster=caster, target=t,
+                ability="Con", dc=dc,
+                on_save=DamageOnSave.HALF,
+                damage=dmg, damage_type="cold",
+            )
 
 
-class FlameStrike(_ActionSpell):
-    """5th-level. DEX save, 4d6 fire + 4d6 radiant (+ 1d6 each/upcast). AoE — single target."""
-    name       = "Flame Strike"
-    SLOT_LEVEL = 5
+class FlameStrike(_AoESpell):
+    """5th-level. DEX save, 4d6 fire + 4d6 radiant (+ 1d6 each/upcast). 10ft radius cylinder."""
+    name          = "Flame Strike"
+    SLOT_LEVEL    = 5
+    RADIUS_FT     = 10
+    CAST_RANGE_FT = 60
+    SAVE_ABILITY  = "Dex"
+    MIN_ENEMIES_HIT = 2
 
-    def _cast(self, caster, target, slot_level):
+    def _avg_damage_at(self, slot_level):
+        # Combined fire + radiant average; two separate saves but same total
+        return (4 + (slot_level - 5)) * 3.5 * 2  # avg d6 = 3.5, two pools
+
+    def _cast_aoe(self, caster, targets, allies, slot_level):
         extra = slot_level - 5
-        fire  = sum(random.randint(1, 6) for _ in range(4 + extra))
-        rad   = sum(random.randint(1, 6) for _ in range(4 + extra))
+        n     = 4 + extra
         dc    = _spell_dc(caster)
-        # Fire component
-        SavingThrow.roll(caster=caster, target=target, ability="Dex", dc=dc,
-                         on_save=DamageOnSave.HALF, damage=fire, damage_type="fire")
-        # Radiant component (separate save for accurate half-damage)
-        SavingThrow.roll(caster=caster, target=target, ability="Dex", dc=dc,
-                         on_save=DamageOnSave.HALF, damage=rad,  damage_type="radiant")
-        print(f"  {caster.name}: Flame Strike! ({fire} fire + {rad} radiant, DC {dc})")
+        all_hit = targets + allies
+        print(f"  {caster.name}: Flame Strike! (DC {dc})"
+              f" — {len(targets)} enem{'y' if len(targets)==1 else 'ies'}"
+              + (f", {len(allies)} allied" if allies else ""))
+        for t in all_hit:
+            fire = sum(random.randint(1, 6) for _ in range(n))
+            rad  = sum(random.randint(1, 6) for _ in range(n))
+            SavingThrow.roll(caster=caster, target=t, ability="Dex", dc=dc,
+                             on_save=DamageOnSave.HALF, damage=fire, damage_type="fire")
+            SavingThrow.roll(caster=caster, target=t, ability="Dex", dc=dc,
+                             on_save=DamageOnSave.HALF, damage=rad,  damage_type="radiant")
+            print(f"    {t.name}: {fire} fire + {rad} radiant")
 
 
 # ── Defensive ─────────────────────────────────────────────────────────────────
@@ -752,6 +1169,8 @@ class HoldPerson(Feature):
         target = self._last_target
         if not (target and target.is_alive()):
             return
+        if target.has_condition("paralyzed"):
+            return   # already held — don't waste another slot
         slots = getattr(creature, "spell_slots", None)
         if not (slots and slots.has_slot(self.SLOT_LEVEL)):
             return
@@ -827,6 +1246,8 @@ class HoldMonster(HoldPerson):
         target = self._last_target
         if not (target and target.is_alive()):
             return
+        if target.has_condition("paralyzed"):
+            return   # already held — don't waste another slot
         slots = getattr(creature, "spell_slots", None)
         if not (slots and slots.has_slot(self.SLOT_LEVEL)):
             return
@@ -908,6 +1329,8 @@ class Slow(Feature):
         target = self._last_target
         if not (target and target.is_alive()):
             return
+        if target.has_condition("slowed"):
+            return   # already slowed — don't stack the effect
         slots = getattr(creature, "spell_slots", None)
         if not (slots and slots.has_slot(self.SLOT_LEVEL)):
             return
@@ -995,6 +1418,8 @@ class Banishment(Feature):
         target = self._last_target
         if not (target and target.is_alive()):
             return
+        if target.has_condition("incapacitated"):
+            return   # already banished/incapacitated — don't waste another slot
         slots = getattr(creature, "spell_slots", None)
         if not (slots and slots.has_slot(self.SLOT_LEVEL)):
             return

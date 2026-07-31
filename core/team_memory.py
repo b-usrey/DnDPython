@@ -28,9 +28,12 @@ parameter added to plan_turn and _pick_target).
 
 from __future__ import annotations
 
+import logging
 from collections import defaultdict
 from dataclasses import dataclass, field
 from typing import TYPE_CHECKING
+
+_log = logging.getLogger(__name__)
 
 if TYPE_CHECKING:
     from core.creature import Creature
@@ -84,20 +87,53 @@ class ThreatProfile:
         return self.last_known_hp / self.last_known_max_hp
 
     @property
+    def danger_score(self) -> float:
+        """
+        Threat output per turn, independent of remaining HP.
+        A wounded dragon is just as dangerous per hit as a fresh one.
+        Uses observed data when available; falls back to a static weapon estimate
+        so round-1 decisions aren't completely blind.
+        """
+        if self.attacks_observed > 0 and self.damage_rolls_seen:
+            hit_rate = self.hits_landed / self.attacks_observed
+            return self.average_damage * hit_rate
+        # No combat data yet — pessimistic static estimate
+        return self._static_damage() * 0.5
+
+    def _static_damage(self) -> float:
+        """
+        Estimate average damage per attack from the creature's equipped items
+        or monster attack templates. Used before any hits are observed.
+        """
+        c = self.creature
+        totals: list[float] = []
+        for item in getattr(c, "equipped_items", []):
+            if getattr(item, "item_type", "") != "weapon":
+                continue
+            die = getattr(item, "damage_die", None)
+            if not die:
+                continue
+            try:
+                num, sides = die.split("d")
+                avg = int(num) * (int(sides) + 1) / 2.0
+                ability = getattr(item, "ability", "Str")
+                avg += c.statblock.mods.get(ability, 0)
+                totals.append(avg)
+            except (ValueError, AttributeError):
+                pass
+        for atk in getattr(c, "_attack_templates", []):
+            sides = atk.get("damage_die", 6)
+            totals.append((sides + 1) / 2.0 + atk.get("damage_mod", 0))
+        return sum(totals) / len(totals) if totals else 5.0
+
+    @property
     def threat_score(self):
         """
-        Composite danger rating. Higher = more threatening.
-        Used by TacticalAI to deprioritise focusing already-wounded enemies
-        in favour of high-threat ones.
-
-        Formula weights:
-          - Damage output (average damage × hit rate observed)
-          - HP remaining (lower HP enemy = less future threat)
+        Legacy composite score (danger × hp_fraction).
+        Still used by the ML state vector — do not remove.
+        For targeting decisions prefer danger_score instead.
         """
-        hit_rate   = self.hits_landed / max(self.attacks_observed, 1)
-        avg_dmg    = self.average_damage
-        hp_frac    = self.hp_fraction
-        return (avg_dmg * hit_rate) * hp_frac   # scales down as enemy weakens
+        return self.danger_score * self.hp_fraction
 
     def __repr__(self):
         return (
@@ -293,42 +329,148 @@ class TeamMemory:
     # Query API — called by TacticalAI during plan_turn()
     # ------------------------------------------------------------------
 
+    # Minimum danger_score that justifies spending a slot on a nearly-dead target
+    _DANGER_OVERRIDE = 8.0
+    # Per-slot HP floor: don't spend slot N if target.hp is below this value
+    _SLOT_HP_FLOORS  = {1: 10, 2: 16, 3: 26, 4: 36, 5: 48}
+    # Condition dampeners for effective_danger_score.
+    # Fully-neutralised conditions (can't act) use 0.1, not 0, to preserve
+    # a residual priority — concentration can break at any moment.
+    _CONDITION_DAMPENERS = {
+        "paralyzed":     0.1,
+        "incapacitated": 0.1,
+        "stunned":       0.1,
+        "restrained":    0.5,
+        "slowed":        0.75,
+    }
+
     def recommended_target(self, enemies: list) -> object | None:
         """
         Return the enemy this team should focus fire on.
 
         Priority order:
-          1. Enemy already being focused by another ally (finish them fast)
-          2. Highest threat score (most dangerous enemy still alive)
-          3. Fallback: weakest HP (original behaviour)
+          1. Already-focused AND nearly dead (<25% HP) — finish them fast
+          2. Highest effective_danger_score — accounts for active conditions:
+             paralyzed/incapacitated targets rank far lower so the team
+             attacks uncontrolled threats instead of piling on a held goblin
+             while a dragon is still free.
+          3. Fallback: weakest HP
 
         Returns None if no enemies are known yet (first turn).
         """
         if not enemies:
             return None
 
-        # Check if any enemy is already being focused by a teammate
-        focus_counts = defaultdict(int)
+        focus_counts: dict = defaultdict(int)
         for profile in self._threats.values():
             if profile.creature in enemies:
-                focus_counts[profile.creature] += profile.times_targeted_by_team
+                focus_counts[id(profile.creature)] += profile.times_targeted_by_team
 
-        # Prefer focusing an already-targeted enemy to pile on
-        focused = [e for e in enemies if focus_counts[e] > 0]
-        if focused:
-            # Among focused enemies, pick the one closest to death
-            return min(focused, key=lambda e: e.hp / max(e.max_hp, 1))
-
-        # No focus history yet — pick by threat score if available
-        scored = [
-            (e, self._threats[id(e)].threat_score)
-            for e in enemies if id(e) in self._threats
+        # Finish off focused enemies that are nearly dead
+        finishing_blows = [
+            e for e in enemies
+            if focus_counts[id(e)] > 0 and e.hp / max(e.max_hp, 1) < 0.25
         ]
-        if scored:
-            return max(scored, key=lambda x: x[1])[0]
+        if finishing_blows:
+            target = min(finishing_blows, key=lambda e: e.hp)
+            _log.info(
+                "[%s] finishing blow → %s (hp %d/%d, targeted %d×)",
+                self.team, target.name, target.hp, target.max_hp,
+                focus_counts[id(target)],
+            )
+            return target
 
-        # Fallback — weakest enemy (original TacticalAI behaviour)
-        return min(enemies, key=lambda e: e.hp)
+        # Most dangerous surviving enemy, dampened by active conditions.
+        # Include all enemies; those with no profile score 0.0.
+        scored = [(e, self.effective_danger_score(e)) for e in enemies]
+        _log.debug(
+            "[%s] danger scores: %s",
+            self.team,
+            ", ".join(
+                f"{e.name}={s:.1f}" for e, s in
+                sorted(scored, key=lambda x: x[1], reverse=True)
+            ),
+        )
+        best_score = max(s for _, s in scored)
+        if best_score > 0:
+            target = max(scored, key=lambda x: x[1])[0]
+            _log.info(
+                "[%s] focus fire → %s (effective_danger=%.1f)",
+                self.team, target.name, best_score,
+            )
+            return target
+
+        # Fallback — weakest enemy (covers first-turn / all-paralysed edge cases)
+        target = min(enemies, key=lambda e: e.hp)
+        _log.info(
+            "[%s] fallback (no danger data) → %s (hp %d/%d)",
+            self.team, target.name, target.hp, target.max_hp,
+        )
+        return target
+
+    def spell_worthy(self, slot_level: int, target) -> bool:
+        """
+        Return True if spending a slot_level spell slot on target is justified.
+
+        Gates on two factors:
+          - HP floor: target must have enough HP that the slot isn't massive overkill
+          - Danger override: very dangerous targets always justify the slot,
+            even when nearly dead (e.g. a near-death dragon that still hits for 30)
+
+        Cantrips (slot_level == 0) are always worth casting.
+        """
+        if slot_level == 0:
+            return True
+        hp_floor = self._SLOT_HP_FLOORS.get(slot_level, slot_level * 10)
+        if target.hp >= hp_floor:
+            _log.debug(
+                "[%s] spell_worthy: level-%d slot OK — %s hp %d ≥ floor %d",
+                self.team, slot_level, target.name, target.hp, hp_floor,
+            )
+            return True
+        profile = self._threats.get(id(target))
+        danger  = profile.danger_score if profile else 0.0
+        worthy  = danger >= self._DANGER_OVERRIDE
+        _log.info(
+            "[%s] spell_worthy: level-%d slot %s — %s hp %d < floor %d, danger=%.1f%s",
+            self.team, slot_level,
+            "OK (danger override)" if worthy else "SKIPPED",
+            target.name, target.hp, hp_floor, danger,
+            f" ≥ {self._DANGER_OVERRIDE}" if worthy else f" < {self._DANGER_OVERRIDE}",
+        )
+        return worthy
+
+    def effective_danger_score(self, enemy) -> float:
+        """
+        danger_score adjusted for active conditions on the enemy.
+
+        A paralyzed/incapacitated/stunned creature scores at ×0.1 — it poses
+        no immediate threat but retains a residual priority because the
+        controlling concentration spell could break at any moment.
+
+        A restrained creature scores at ×0.5 (still acts, still hits).
+        A slowed creature scores at ×0.75.
+
+        Uses the most restrictive dampener when multiple conditions stack.
+        Returns 0.0 for enemies not yet profiled (first-turn unknown).
+        """
+        profile = self._threats.get(id(enemy))
+        if not profile:
+            return 0.0
+        base     = profile.danger_score
+        dampener = 1.0
+        active_conditions = []
+        for cond, factor in self._CONDITION_DAMPENERS.items():
+            if hasattr(enemy, "has_condition") and enemy.has_condition(cond):
+                dampener = min(dampener, factor)
+                active_conditions.append(cond)
+        if active_conditions:
+            _log.debug(
+                "[%s] %s danger %.1f × %.2f [%s] → %.1f",
+                self.team, enemy.name, base, dampener,
+                ", ".join(active_conditions), base * dampener,
+            )
+        return base * dampener
 
     def threat_level(self, enemy) -> float:
         """

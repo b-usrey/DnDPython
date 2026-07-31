@@ -1,4 +1,3 @@
-from pdb import set_trace as S
 class StatBlock:
     def __init__(self, stats, proficiency=2):
         # stats is a dict: {"Str": 12, "Dex": 16, "Con": 14, ...}
@@ -8,6 +7,9 @@ class StatBlock:
         self.mods = {k: (v - 10) // 2 for k, v in stats.items()}
         # Saving throw proficiencies (0 or 1 by default)
         self.save_profs = {k: 0 for k in stats.keys()}
+
+    def _recompute_mods(self):
+        self.mods = {k: (v - 10) // 2 for k, v in self.scores.items()}
 
     def mod(self, ability):
         return self.mods.get(ability, 0)
