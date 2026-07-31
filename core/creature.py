@@ -516,7 +516,27 @@ class Creature:
 
     # ── Features ──────────────────────────────────────────────────────────
 
-    def _add_feature_by_name(self, name):
+    def _add_feature_by_name(self, name, homebrew_def=None):
+        """
+        Attach a feature by name. If homebrew_def is given, it's a
+        validated homebrew definition (see data/features/homebrew.py) —
+        used for a class JSON entry like {"name": "...", "homebrew": {...}}
+        instead of a Feature.REGISTRY lookup. homebrew_def is expected to
+        have already passed validate_homebrew_definition(); this re-checks
+        defensively since a rejected definition should silently not attach
+        rather than raise mid-character-build.
+        """
+        if homebrew_def is not None:
+            from data.features.homebrew import HomebrewFeature, validate_homebrew_definition
+            errors = validate_homebrew_definition(homebrew_def)
+            if errors:
+                print(f"[warn] Homebrew feature '{name}' rejected: {'; '.join(errors)}")
+                return
+            feature = HomebrewFeature(name, homebrew_def)
+            self.features.append(feature)
+            feature.attach(self, self.event_manager)
+            return
+
         if name in Feature.REGISTRY:
             feature_class = Feature.REGISTRY[name]
             feature = feature_class()
