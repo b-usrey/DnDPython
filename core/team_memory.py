@@ -340,6 +340,7 @@ class TeamMemory:
         "paralyzed":     0.1,
         "incapacitated": 0.1,
         "stunned":       0.1,
+        "unconscious":   0.1,   # includes creatures dying at 0 HP
         "restrained":    0.5,
         "slowed":        0.75,
     }
@@ -417,6 +418,10 @@ class TeamMemory:
           - Danger override: very dangerous targets always justify the slot,
             even when nearly dead (e.g. a near-death dragon that still hits for 30)
 
+        A downed, unconscious target (dying, 0 HP) is never worth a slot —
+        any weapon hit finishes them (auto-fails a death save) for free,
+        regardless of how dangerous their danger_score says they used to be.
+
         Cantrips (slot_level == 0) are always worth casting.
         """
         if slot_level == 0:
@@ -428,6 +433,12 @@ class TeamMemory:
                 self.team, slot_level, target.name, target.hp, hp_floor,
             )
             return True
+        if getattr(target, "has_condition", None) and target.has_condition("dying"):
+            _log.debug(
+                "[%s] spell_worthy: level-%d slot SKIPPED — %s is down and dying",
+                self.team, slot_level, target.name,
+            )
+            return False
         profile = self._threats.get(id(target))
         danger  = profile.danger_score if profile else 0.0
         worthy  = danger >= self._DANGER_OVERRIDE

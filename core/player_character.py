@@ -7,6 +7,10 @@ from data.features.base import Feature
 import json
 FLAG_IS_OMNIPOTENT = True
 class PlayerCharacter(Creature):
+    # PCs fall unconscious and roll death saves at 0 HP instead of dying
+    # outright (5e RAW — see Creature.DEATH_SAVES).
+    DEATH_SAVES = True
+
     def __init__(self, name, classes,subclasses,stats,event,choices,feats=[],team="blue"):
         """
         name: Character name (string)

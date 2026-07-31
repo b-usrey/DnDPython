@@ -59,8 +59,14 @@ class CombatManager:
         self.timed_out  = False
         self.ai = TacticalAI()
 
-        # Subscribe to creature_downed so we can prune the initiative order
+        # Subscribe to creature_downed so we can prune the initiative order.
+        # creature_downed fires both for outright deaths and for a
+        # PlayerCharacter dropping to 0 HP and starting death saves — only
+        # the former is removed from the map immediately. creature_died
+        # fires later if a dying creature actually dies (3 failed saves,
+        # an auto-fail hit, or massive damage).
         self.event.subscribe("creature_downed", self._on_creature_downed)
+        self.event.subscribe("creature_died",   self._on_creature_died)
 
         # Create one TeamMemory per team — works for any number of teams
         self.memories: dict[str, TeamMemory] = TeamMemory.create_for_all_teams(
@@ -127,6 +133,15 @@ class CombatManager:
 
     def _run_turn(self, creature) -> None:
         """Execute one creature's full turn."""
+        if creature.has_condition("dying"):
+            # Unconscious at 0 HP: no action economy, no TurnStarted event
+            # (would let TurnStarted-hooked features like spells act on
+            # their behalf) — just the death saving throw.
+            print(f"\n  >> {creature.name} is unconscious and dying "
+                  f"(HP: {creature.hp}/{creature.max_hp})")
+            creature.roll_death_save()
+            return
+
         print(f"\n  >> {creature.name}'s turn  "
               f"(HP: {creature.hp}/{creature.max_hp}  AC: {creature.ac})")
 
@@ -582,7 +597,22 @@ class CombatManager:
     # ------------------------------------------------------------------
 
     def _on_creature_downed(self, data) -> None:
-        """Remove downed creatures from the battle map."""
+        """
+        Remove creatures that died outright from the battle map. A creature
+        entering the death-save 'dying' state stays on the map, unconscious,
+        until it actually dies (see _on_creature_died) or is healed.
+        """
+        creature = data.get("creature")
+        if not creature:
+            return
+        if data.get("dying"):
+            print(f"  [{creature.name} is unconscious at 0 HP — dying]")
+            return
+        self.battle_map.remove(creature)
+        print(f"  [{creature.name} removed from map]")
+
+    def _on_creature_died(self, data) -> None:
+        """A dying creature actually died (3 failures / auto-fail / massive damage)."""
         creature = data.get("creature")
         if creature:
             self.battle_map.remove(creature)

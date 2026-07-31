@@ -31,6 +31,11 @@ class Creature:
 
     _id_counter = itertools.count(1)
 
+    # Ordinary creatures die outright at 0 HP (5e RAW for most monsters).
+    # PlayerCharacter sets this True to fall unconscious and roll death
+    # saving throws instead — see _start_dying()/roll_death_save().
+    DEATH_SAVES = False
+
     def __init__(self, name, hp, ac, stats, event_manager, proficiency=2):
         # ── Identity ──────────────────────────────────────────────────────
         self.ID = next(Creature._id_counter)
@@ -81,6 +86,11 @@ class Creature:
         self._conc_feature  = None   # Feature to notify if concentration breaks
         self.speed = 30
 
+        # ── Death saving throws (only meaningful while DEATH_SAVES=True) ───
+        self._dead                 = False
+        self.death_save_successes  = 0
+        self.death_save_failures   = 0
+
         # ── Damage resistances (set of damage type strings) ───────────────
         self.resistances: set = set()
 
@@ -106,7 +116,13 @@ class Creature:
         return self._max_hp
 
     def is_alive(self):
-        return self._current_hp > 0
+        """
+        True until the creature is truly dead. A creature at 0 HP with
+        DEATH_SAVES=True (e.g. a downed PlayerCharacter) stays "alive" —
+        unconscious and rolling death saves — until it dies or is healed.
+        Ordinary creatures die the instant HP hits 0.
+        """
+        return not self._dead
 
     # ── AC helpers ────────────────────────────────────────────────────────
 
@@ -131,7 +147,7 @@ class Creature:
         self._shield_ac = bonus
         self.compute_ac()
 
-    def take_damage(self, amount, damage_type=None):
+    def take_damage(self, amount, damage_type=None, critical=False):
         """
         Apply damage to this creature.
 
@@ -142,6 +158,12 @@ class Creature:
         a CON saving throw (DC = max(10, damage // 2)). On failure,
         concentration is broken.
 
+        If already dying (0 HP, DEATH_SAVES=True), damage doesn't reduce
+        HP further — instead it's an automatic death save failure (two on
+        a critical hit), or instant death if it's ≥ max HP in one hit.
+        `critical` should be passed for weapon attacks; saving-throw
+        damage never crits, so it defaults to False there.
+
         Returns actual damage dealt.
         """
         if amount <= 0:
@@ -149,6 +171,10 @@ class Creature:
 
         if damage_type and damage_type.lower() in self.resistances:
             amount = max(1, amount // 2)
+
+        if self.has_condition("dying"):
+            self._damage_while_dying(amount, critical)
+            return amount
 
         # Temp HP absorbs first
         absorbed  = min(self._temp_hp, amount)
@@ -219,14 +245,24 @@ class Creature:
         self._conc_feature = None
 
     def heal(self, amount):
-        """Restore HP up to max. Returns amount actually healed."""
-        if amount <= 0:
+        """
+        Restore HP up to max. Returns amount actually healed.
+        Healing a dying creature (even from 0 HP) wakes it up immediately
+        and clears its death save progress. No-op on a truly dead creature
+        — this sim has no resurrection magic.
+        """
+        if amount <= 0 or self._dead:
             return 0
         before = self._current_hp
         self._current_hp = min(self._max_hp, self._current_hp + amount)
         healed = self._current_hp - before
         if healed > 0:
             self.conditions.discard("unconscious")
+            if self.has_condition("dying"):
+                self.conditions.discard("dying")
+                self.death_save_successes = 0
+                self.death_save_failures  = 0
+                print(f"  {self.name} is healed back to consciousness!")
         return healed
 
     def add_temp_hp(self, amount):
@@ -235,13 +271,112 @@ class Creature:
 
     def _on_downed(self):
         """
-        Called when HP reaches 0. Base behaviour: add unconscious condition
-        and broadcast 'creature_downed'. PlayerCharacter overrides this
-        to start death saving throws instead.
+        Called when HP reaches 0. Ordinary creatures die outright. Creatures
+        with DEATH_SAVES=True (PlayerCharacter) fall unconscious and start
+        rolling death saving throws instead.
+
+        Either way, dropping to 0 HP always ends concentration — an
+        unconscious or dead creature can't sustain it (unlike a failed
+        concentration save from non-lethal damage, which only breaks it
+        on a failure).
         """
+        self.break_concentration()
+        if self.DEATH_SAVES:
+            self._start_dying()
+            return
         self.conditions.add("unconscious")
+        self.conditions.add("dead")
+        self._dead = True
         self.event_manager.broadcast("creature_downed", {"creature": self})
         print(f"{self.name} has been downed!")
+
+    # ── Death saving throws ─────────────────────────────────────────────────
+
+    def _start_dying(self):
+        """Enter the dying state: unconscious at 0 HP, rolling death saves."""
+        self.conditions.add("unconscious")
+        self.conditions.add("dying")
+        self.death_save_successes = 0
+        self.death_save_failures  = 0
+        self.event_manager.broadcast("creature_downed", {"creature": self, "dying": True})
+        print(f"  {self.name} drops to 0 HP and is dying!")
+
+    def _damage_while_dying(self, amount: int, critical: bool) -> None:
+        """
+        5e RAW: any hit while at 0 HP is an automatic death save failure
+        (two on a critical hit). Damage that would equal or exceed max HP
+        in one hit kills outright, bypassing any remaining death saves.
+        """
+        if amount >= self._max_hp:
+            print(f"  {self.name} suffers massive damage and dies instantly!")
+            self._true_death()
+            return
+        fails = 2 if critical else 1
+        print(f"  {self.name} is hit while dying — "
+              f"{fails} automatic death save failure{'s' if fails > 1 else ''}!")
+        self._register_death_save_failure(fails)
+
+    def _register_death_save_failure(self, count: int = 1) -> None:
+        self.death_save_failures += count
+        if self.death_save_failures >= 3:
+            self._true_death()
+
+    def _true_death(self) -> None:
+        self.conditions.discard("dying")
+        self.conditions.discard("unconscious")
+        self.conditions.add("dead")
+        self._dead = True
+        print(f"{self.name} has died.")
+        self.event_manager.broadcast("creature_died", {"creature": self})
+
+    def roll_death_save(self) -> None:
+        """
+        Roll a flat, unmodified d20 death saving throw (PHB p.197).
+        Natural 20: regain 1 HP and wake up. Natural 1: two failures.
+        10+: success. Below 10: failure. Three successes stabilises the
+        creature (still unconscious, stops rolling). Three failures kills it.
+        No-op if the creature isn't currently dying.
+        """
+        if not self.has_condition("dying"):
+            return
+
+        d20 = random.randint(1, 20)
+        print(f"  {self.name} rolls a death saving throw: {d20}")
+
+        if d20 == 20:
+            self.death_save_successes = 0
+            self.death_save_failures  = 0
+            self.conditions.discard("dying")
+            self.conditions.discard("unconscious")
+            self._current_hp = 1
+            print(f"  {self.name} rolls a natural 20 — regains 1 HP and wakes up!")
+            self.event_manager.broadcast(
+                "creature_stabilized", {"creature": self, "woke_up": True}
+            )
+            return
+
+        if d20 == 1:
+            self._register_death_save_failure(2)
+        elif d20 >= 10:
+            self.death_save_successes += 1
+        else:
+            self._register_death_save_failure(1)
+
+        if not self.is_alive():
+            return   # _true_death already fired and reported
+
+        if self.death_save_successes >= 3:
+            self.death_save_successes = 0
+            self.death_save_failures  = 0
+            self.conditions.discard("dying")
+            print(f"  {self.name} is stable.")
+            self.event_manager.broadcast(
+                "creature_stabilized", {"creature": self, "woke_up": False}
+            )
+            return
+
+        print(f"  {self.name}: {self.death_save_successes} successes, "
+              f"{self.death_save_failures} failures")
 
     # ── Damage event listener ─────────────────────────────────────────────
 
@@ -280,6 +415,9 @@ class Creature:
             attack.disadvantage = True
         if target is self and self.has_condition("restrained"):
             attack.advantage = True
+        # Unconscious (including dying): attacks against it have advantage
+        if target is self and self.has_condition("unconscious"):
+            attack.advantage = True
 
     def _on_damage_event(self, data):
         """
@@ -297,7 +435,10 @@ class Creature:
         if damage and damage > 0:
             dmg_type = getattr(attack, "damage_type", None)
             print(f"{self.name} takes {damage} damage!")
-            self.take_damage(damage, damage_type=dmg_type)
+            self.take_damage(
+                damage, damage_type=dmg_type,
+                critical=getattr(attack, "critical", False),
+            )
             print(f"  ({self._current_hp}/{self._max_hp} HP remaining)")
 
     # ── Conditions ────────────────────────────────────────────────────────

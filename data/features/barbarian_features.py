@@ -310,6 +310,9 @@ class RelentlessRage(Feature):
         if result.success:
             self.owner._current_hp = 1
             self.owner.conditions.discard("unconscious")
+            self.owner.conditions.discard("dying")
+            self.owner.death_save_successes = 0
+            self.owner.death_save_failures  = 0
             print(f"  {self.owner.name} clings to life at 1 HP!")
 
 

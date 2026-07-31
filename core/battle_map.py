@@ -365,6 +365,8 @@ class BattleMap:
                 continue  # allies don't get OA
             if other.has_condition("incapacitated"):
                 continue  # incapacitated creatures can't react
+            if other.has_condition("unconscious"):
+                continue  # unconscious creatures can't react either (e.g. dying at 0 HP)
 
             threatened = self.get_threatened_squares(other)
             leaving_reach = (origin in threatened) and \
