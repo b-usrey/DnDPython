@@ -1,5 +1,6 @@
 import os
 import json
+import logging
 from argparse import ArgumentParser
 
 from core.events import EventBus
@@ -20,6 +21,9 @@ from data.monsters.monsters import *
 from utils.creatureFactory import CreatureFactory
 from utils.scenarioLoader import ScenarioLoader
 from utils.battle_visualiser import BattleVisualiser
+
+
+logging.basicConfig(level=logging.INFO, format = "%(message)s")
 
 
 def load_json(filename):

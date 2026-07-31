@@ -28,7 +28,7 @@ Combat-relevant SRD spells for all spellcasting classes.
 
 ── Action damage spells: 3rd–5th level ──────────────────────────────────────
   Fireball          Wizard/Sorc.  DEX save, 8d6 fire (+ 1d6/upcast)
-  LightningBolt     Wizard/Sorc.  DEX save, 8d6 lightning (+ 1d6/upcast)
+  LightningBolt     Wizard/Sorc.  DEX save, 8d6 lightning (+ 1d6/upcast), 100×5ft line
   Blight            Cleric/Druid  CON save, 8d8 necrotic (no upcast; single target)
   ConeOfCold        Wizard        CON save, 8d8 cold (+ 1d8/upcast)
   FlameStrike       Cleric        DEX save, 4d6 fire + 4d6 radiant (+ 1d6/upcast)
@@ -52,6 +52,7 @@ Combat-relevant SRD spells for all spellcasting classes.
   Banishment        Cleric/Paladin CHA save; target incapacitated while conc. holds
 """
 import logging
+import math
 import random
 from data.features.base import Feature
 from core.saving_throw import SavingThrow, DamageOnSave
@@ -137,6 +138,38 @@ def _creatures_in_aoe(creatures: list, center: tuple, radius_sq: int) -> list:
     for c in creatures:
         pos = getattr(c, "pos", None)
         if pos and max(abs(pos[0] - center[0]), abs(pos[1] - center[1])) <= radius_sq:
+            result.append(c)
+    return result
+
+
+def _creatures_in_line(creatures: list, origin: tuple, end: tuple, half_width_sq: float) -> list:
+    """
+    Return creatures within half_width_sq squares of the line segment
+    origin→end (perpendicular distance), excluding anything behind origin.
+
+    Used for line-shaped spells (Lightning Bolt) where a fixed-radius
+    center point doesn't apply — the AOE is a directed segment instead.
+    """
+    ox, oy = origin
+    ex, ey = end
+    dx, dy = ex - ox, ey - oy
+    seg_len_sq = dx * dx + dy * dy
+    if seg_len_sq == 0:
+        return []
+
+    result = []
+    for c in creatures:
+        pos = getattr(c, "pos", None)
+        if not pos:
+            continue
+        px, py = pos
+        t = ((px - ox) * dx + (py - oy) * dy) / seg_len_sq
+        if t < 0:
+            continue   # behind the caster
+        t_clamped = min(1.0, t)
+        cx = ox + t_clamped * dx
+        cy = oy + t_clamped * dy
+        if math.hypot(px - cx, py - cy) <= half_width_sq:
             result.append(c)
     return result
 
@@ -246,18 +279,28 @@ class _AoESpell(_ActionSpell):
     If no center produces a positive score the spell does not fire.
 
     Shape variants:
-      SELF_CENTERED = False  (default) — caster chooses a point in range
-      SELF_CENTERED = True             — center is always the caster
-                                         (Thunderwave, Burning Hands)
+      SHAPE = "burst" (default) — a radius/cube/cone approximated as a
+              Chebyshev-distance circle around a chosen center point.
+        SELF_CENTERED = False — caster chooses a point in range
+        SELF_CENTERED = True  — center is always the caster
+                                (Thunderwave, Burning Hands)
+      SHAPE = "line" — a directed segment from the caster outward
+              (Lightning Bolt). Candidate directions are aimed through
+              each living enemy and extended to LINE_LENGTH_FT; width is
+              LINE_WIDTH_FT. Always originates at the caster.
     """
 
-    RADIUS_FT         = 20     # AOE radius in feet
-    CAST_RANGE_FT     = 150    # max distance from caster to AOE center
+    RADIUS_FT         = 20     # burst shape: AOE radius in feet
+    CAST_RANGE_FT     = 150    # burst shape: max distance from caster to AOE center
     SAVE_ABILITY      = "Dex"  # ability for saving throws against this spell
-    SELF_CENTERED     = False  # True = center locked to caster position
+    SELF_CENTERED     = False  # burst shape: True = center locked to caster position
     MIN_ENEMIES_HIT   = 2      # minimum enemies that must be caught
     FRIENDLY_FIRE_MAX = 0.0    # max ally_dmg / total_dmg ratio
     FRIENDLY_PENALTY  = 2.0    # score penalty multiplier for ally damage
+
+    SHAPE             = "burst"  # "burst" or "line"
+    LINE_LENGTH_FT    = 100     # line shape: max segment length
+    LINE_WIDTH_FT     = 5       # line shape: segment width
 
     # ------------------------------------------------------------------
     # Turn entry point (replaces _ActionSpell.on_turn_started)
@@ -324,7 +367,7 @@ class _AoESpell(_ActionSpell):
 
     def _find_best_placement(self, caster, battle_map):
         """
-        Return (enemies_list, allies_list) for the optimal AOE center,
+        Return (enemies_list, allies_list) for the optimal AOE placement,
         or None if no valid placement exists.
         """
         caster_pos = battle_map.get_position(caster)
@@ -338,12 +381,70 @@ class _AoESpell(_ActionSpell):
         if not all_enemies:
             return None
 
-        radius_sq = self.RADIUS_FT // 5
         # Relax minimum so a solo-enemy fight is never locked out
         effective_min = min(self.MIN_ENEMIES_HIT, len(all_enemies))
+        avg_dmg       = self._avg_damage_at(self.SLOT_LEVEL)
+
+        if self.SHAPE == "line":
+            placements = self._line_placements(caster_pos, all_enemies, all_allies)
+        else:
+            placements = self._burst_placements(
+                caster_pos, battle_map, all_enemies, all_allies
+            )
+
+        best_score  = 0.0   # must exceed 0 to justify burning a slot
+        best_result = None
+
+        for enemies_caught, allies_caught in placements:
+            if len(enemies_caught) < effective_min:
+                continue
+
+            enemy_dmg = sum(
+                min(e.hp, self._expected_dmg(caster, e, avg_dmg))
+                for e in enemies_caught
+            )
+            ally_dmg = sum(
+                min(a.hp, self._expected_dmg(caster, a, avg_dmg))
+                for a in allies_caught
+            )
+
+            # Friendly-fire ratio gate
+            total_dmg = enemy_dmg + ally_dmg
+            if total_dmg > 0 and ally_dmg / total_dmg > self.FRIENDLY_FIRE_MAX:
+                _log.debug(
+                    "[%s] %s: placement rejected — friendly fire %.0f%% > max %.0f%%",
+                    caster.team, caster.name,
+                    100 * ally_dmg / total_dmg, 100 * self.FRIENDLY_FIRE_MAX,
+                )
+                continue
+
+            score = enemy_dmg - self.FRIENDLY_PENALTY * ally_dmg
+            _log.debug(
+                "[%s] %s: placement hits %d enemies (edamg=%.1f) %d allies (adamg=%.1f) → score=%.1f",
+                caster.team, caster.name,
+                len(enemies_caught), enemy_dmg,
+                len(allies_caught),  ally_dmg,
+                score,
+            )
+            if score > best_score:
+                best_score  = score
+                best_result = (enemies_caught, allies_caught)
+
+        if best_result:
+            _log.debug(
+                "[%s] %s: best placement score=%.1f for %s",
+                caster.team, caster.name, best_score, self.name,
+            )
+        return best_result
+
+    def _burst_placements(self, caster_pos, battle_map, all_enemies, all_allies):
+        """
+        Yield (enemies_caught, allies_caught) for each candidate burst center.
+        """
+        radius_sq = self.RADIUS_FT // 5
 
         if self.SELF_CENTERED:
-            candidates = [caster_pos]
+            centers = [caster_pos]
         else:
             cast_range_sq = self.CAST_RANGE_FT // 5
             # Candidate centers: squares near each enemy and within cast range.
@@ -361,56 +462,47 @@ class _AoESpell(_ActionSpell):
                         if max(abs(cp[0] - caster_pos[0]),
                                abs(cp[1] - caster_pos[1])) <= cast_range_sq:
                             raw.add(cp)
-            candidates = list(raw)
+            centers = list(raw)
 
-        avg_dmg     = self._avg_damage_at(self.SLOT_LEVEL)
-        best_score  = 0.0   # must exceed 0 to justify burning a slot
-        best_result = None
+        for center in centers:
+            yield (
+                _creatures_in_aoe(all_enemies, center, radius_sq),
+                _creatures_in_aoe(all_allies,  center, radius_sq),
+            )
 
-        for center in candidates:
-            enemies_caught = _creatures_in_aoe(all_enemies, center, radius_sq)
-            allies_caught  = _creatures_in_aoe(all_allies,  center, radius_sq)
+    def _line_placements(self, caster_pos, all_enemies, all_allies):
+        """
+        Yield (enemies_caught, allies_caught) for each candidate line direction.
 
-            if len(enemies_caught) < effective_min:
+        A line always originates at the caster and travels its full length,
+        unlike a burst which can be centered anywhere. Candidate directions
+        are aimed straight through each living enemy's square (one line per
+        distinct direction) — the natural set of "point the bolt here"
+        choices, same O(E) spirit as the burst search staying near enemies.
+        """
+        length_sq     = self.LINE_LENGTH_FT / 5.0
+        half_width_sq = (self.LINE_WIDTH_FT / 5.0) / 2.0
+
+        seen_dirs: set = set()
+        for e in all_enemies:
+            epos = getattr(e, "pos", None)
+            if not epos or epos == caster_pos:
                 continue
-
-            enemy_dmg = sum(
-                min(e.hp, self._expected_dmg(caster, e, avg_dmg))
-                for e in enemies_caught
-            )
-            ally_dmg = sum(
-                min(a.hp, self._expected_dmg(caster, a, avg_dmg))
-                for a in allies_caught
-            )
-
-            # Friendly-fire ratio gate
-            total_dmg = enemy_dmg + ally_dmg
-            if total_dmg > 0 and ally_dmg / total_dmg > self.FRIENDLY_FIRE_MAX:
-                _log.debug(
-                    "[%s] %s: center %s rejected — friendly fire %.0f%% > max %.0f%%",
-                    caster.team, caster.name, center,
-                    100 * ally_dmg / total_dmg, 100 * self.FRIENDLY_FIRE_MAX,
-                )
+            dx, dy = epos[0] - caster_pos[0], epos[1] - caster_pos[1]
+            dist = math.hypot(dx, dy)
+            if dist == 0:
                 continue
+            ux, uy = dx / dist, dy / dist
+            key = (round(ux, 2), round(uy, 2))
+            if key in seen_dirs:
+                continue
+            seen_dirs.add(key)
 
-            score = enemy_dmg - self.FRIENDLY_PENALTY * ally_dmg
-            _log.debug(
-                "[%s] %s: center %s hits %d enemies (edamg=%.1f) %d allies (adamg=%.1f) → score=%.1f",
-                caster.team, caster.name, center,
-                len(enemies_caught), enemy_dmg,
-                len(allies_caught),  ally_dmg,
-                score,
+            end = (caster_pos[0] + ux * length_sq, caster_pos[1] + uy * length_sq)
+            yield (
+                _creatures_in_line(all_enemies, caster_pos, end, half_width_sq),
+                _creatures_in_line(all_allies,  caster_pos, end, half_width_sq),
             )
-            if score > best_score:
-                best_score  = score
-                best_result = (enemies_caught, allies_caught)
-
-        if best_result:
-            _log.debug(
-                "[%s] %s: best placement score=%.1f for %s",
-                caster.team, caster.name, best_score, self.name,
-            )
-        return best_result
 
     # ------------------------------------------------------------------
     # Damage estimation helpers
@@ -864,23 +956,34 @@ class Fireball(_AoESpell):
             )
 
 
-class LightningBolt(_ActionSpell):
-    """3rd-level. DEX save, 8d6 lightning (+ 1d6/upcast).
-    True shape is a 5×100ft line — modelled as single-target here.
-    Multi-target line AOE is a future enhancement."""
-    name       = "Lightning Bolt"
-    SLOT_LEVEL = 3
+class LightningBolt(_AoESpell):
+    """3rd-level. DEX save, 8d6 lightning (+ 1d6/upcast). 100ft × 5ft line from caster."""
+    name           = "Lightning Bolt"
+    SLOT_LEVEL     = 3
+    SHAPE          = "line"
+    LINE_LENGTH_FT = 100
+    LINE_WIDTH_FT  = 5
+    SAVE_ABILITY   = "Dex"
+    MIN_ENEMIES_HIT = 2
 
-    def _cast(self, caster, target, slot_level):
+    def _avg_damage_at(self, slot_level):
+        return (8 + (slot_level - 3)) * 3.5  # d6 avg = 3.5
+
+    def _cast_aoe(self, caster, targets, allies, slot_level):
         n   = 8 + (slot_level - 3)
         dmg = sum(random.randint(1, 6) for _ in range(n))
-        SavingThrow.roll(
-            caster=caster, target=target,
-            ability="Dex", dc=_spell_dc(caster),
-            on_save=DamageOnSave.HALF,
-            damage=dmg, damage_type="lightning",
-        )
-        print(f"  {caster.name}: Lightning Bolt! ({n}d6 lightning, DC {_spell_dc(caster)})")
+        dc  = _spell_dc(caster)
+        all_hit = targets + allies
+        print(f"  {caster.name}: Lightning Bolt! ({n}d6={dmg} lightning, DC {dc})"
+              f" — {len(targets)} enem{'y' if len(targets)==1 else 'ies'}"
+              + (f", {len(allies)} allied" if allies else ""))
+        for t in all_hit:
+            SavingThrow.roll(
+                caster=caster, target=t,
+                ability="Dex", dc=dc,
+                on_save=DamageOnSave.HALF,
+                damage=dmg, damage_type="lightning",
+            )
 
 
 class Blight(_ActionSpell):
