@@ -67,6 +67,52 @@ class RLStrategySelector(StrategySelector):
         td_target = reward + (0.0 if done else self.gamma * float(np.max(self.Q[s_])))
         self.Q[s, a] += self.alpha * (td_target - self.Q[s, a])
 
+    def state_value(self, obs) -> float:
+        """
+        V(s) = max_a Q(s,a) under the current table. Used both for greedy
+        action selection (implicitly, via select()) and as the potential
+        function for reward shaping in learn_from_episode().
+        """
+        return float(np.max(self.Q[self.disc.discretise(obs)]))
+
+    def learn_from_episode(self, trajectory: list, outcome: float) -> None:
+        """
+        Replay one episode's (obs, action) trajectory as genuine step-wise
+        TD(0) updates, with potential-based reward shaping (Ng, Harada &
+        Russell 1999) toward this selector's own current state-value
+        estimate: each step's reward is the raw terminal outcome (0 on
+        every step except the last) plus gamma*V(next_obs) - V(obs).
+
+        This gives a dense per-step signal that rewards moving toward
+        states the Q-table already rates as more likely to win, while
+        provably leaving the optimal policy identical to training on the
+        sparse terminal reward alone (that's the point of potential-based
+        shaping over ad hoc heuristic bonuses -- it can't distort what
+        "optimal" means, only how fast you get there).
+
+        Replaces the old approach of replaying the trajectory backward
+        with a single manually-decayed terminal reward and next_obs=obs,
+        done=True on every step -- that collapsed to per-visit Monte Carlo
+        credit assignment and never actually bootstrapped off a distinct
+        future state's value.
+
+        Args:
+            trajectory: [(obs, action), ...] in the order they were visited.
+            outcome:    the episode's terminal reward, e.g. from
+                        CombatEnv._outcome_reward().
+        """
+        n = len(trajectory)
+        for i, (obs, action) in enumerate(trajectory):
+            is_last    = (i == n - 1)
+            next_obs   = trajectory[i + 1][0] if not is_last else obs
+            env_reward = outcome if is_last else 0.0
+
+            v_s  = self.state_value(obs)
+            v_s2 = 0.0 if is_last else self.state_value(next_obs)
+            shaped_reward = env_reward + self.gamma * v_s2 - v_s
+
+            self.update(obs, action, shaped_reward, next_obs, done=is_last)
+
     def decay_epsilon(self):
         self.eps = max(self.eps_min, self.eps * self.eps_decay)
 
@@ -110,12 +156,10 @@ def _rl_train_worker(args):
     with contextlib.redirect_stdout(io.StringIO()):
         for ep in range(n_episodes):
             trajectory.clear()
-            shaped = env.run_episode(selector=sel)
-            G      = env._outcome_reward()
-            won    = env._outcome_won()
-            for obs, action in reversed(trajectory):
-                sel.update(obs, action, G, obs, done=True)
-                G *= sel.gamma
+            shaped  = env.run_episode(selector=sel)
+            outcome = env._outcome_reward()
+            won     = env._outcome_won()
+            sel.learn_from_episode(trajectory, outcome)
             sel.decay_epsilon()
             ep_rewards.append(shaped)
             ep_wins.append(int(won))

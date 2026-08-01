@@ -31,7 +31,9 @@ class StrategyTrainer:
         workers:     int  = 1,
     ) -> list[float]:
         """
-        RL training via episode-level Monte Carlo Q updates.
+        RL training via step-wise TD(0) updates with potential-based reward
+        shaping toward the Q-table's own state-value estimate -- see
+        RLStrategySelector.learn_from_episode().
 
         Pass log=TrainingLog("run_name") to record per-episode stats.
         Returns list of per-episode total rewards.
@@ -135,11 +137,9 @@ class StrategyTrainer:
             total = self.env.run_episode(selector=self.selector)
             episode_rewards.append(total)
 
-            won = self.env._outcome_won()
-            G   = self.env._outcome_reward()
-            for obs, action in reversed(trajectory):
-                self.selector.update(obs, action, G, obs, done=True)
-                G *= self.selector.gamma
+            won     = self.env._outcome_won()
+            outcome = self.env._outcome_reward()
+            self.selector.learn_from_episode(trajectory, outcome)
 
             self.selector.decay_epsilon()
 
