@@ -273,14 +273,16 @@ class StrategyTrainer:
         log: TrainingLog | None = None,
     ) -> list[float]:
         """
-        DQN training via experience replay.
+        DQN training via experience replay, with potential-based reward
+        shaping toward the target network's own state-value estimate --
+        see DQNStrategySelector.learn_from_episode().
 
         Records (obs, action) pairs during each episode using the same
-        instrumented-selector approach as train_rl(), then pushes all
-        transitions to the replay buffer with the fractional outcome reward
-        and runs a minibatch gradient step. This gives DQN's replay +
-        target-network stability benefits while reusing the existing
-        run_episode() interface.
+        instrumented-selector approach as train_rl(), then replays them
+        as shaped transitions pushed to the replay buffer with a minibatch
+        gradient step per push. This gives DQN's replay + target-network
+        stability benefits while reusing the existing run_episode()
+        interface.
 
         Pass log=TrainingLog("run_name") to record per-episode stats.
         Returns list of per-episode total rewards.
@@ -308,14 +310,7 @@ class StrategyTrainer:
             outcome   = self.env._outcome_reward()
             won       = self.env._outcome_won()
 
-            # Push every (obs, action) pair from this episode to the buffer.
-            # All transitions get the fractional outcome reward; the final
-            # transition is marked done=True so the target Q is not bootstrapped.
-            n = len(trajectory)
-            for i, (obs, action) in enumerate(trajectory):
-                is_last  = (i == n - 1)
-                next_obs = trajectory[i + 1][0] if not is_last else obs
-                self.selector.update(obs, action, outcome, next_obs, done=is_last)
+            self.selector.learn_from_episode(trajectory, outcome)
 
             self.selector.decay_epsilon()
             episode_rewards.append(ep_reward)

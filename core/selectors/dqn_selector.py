@@ -135,6 +135,53 @@ class DQNStrategySelector(StrategySelector):
         self.tactic_counts[result] += 1
         return result
 
+    def state_value(self, obs) -> float:
+        """
+        V(s) = max_a Q_target(s,a) under the target network -- used as the
+        potential function for reward shaping in learn_from_episode(). The
+        target network is used rather than the online one for the same
+        reason it's already used in the Bellman backup in _train_step():
+        it only moves every target_update_freq episodes, so shaping stays
+        stable across a whole episode's replay while the online network is
+        actively training underneath it.
+        """
+        with torch.no_grad():
+            t = torch.tensor(obs[:self.n_obs], dtype=torch.float32,
+                             device=self._device).unsqueeze(0)
+            return float(self._target(t).max(dim=1).values.item())
+
+    def learn_from_episode(self, trajectory: list, outcome: float) -> None:
+        """
+        Replay one episode's (obs, action) trajectory as genuine step-wise
+        updates, with potential-based reward shaping (Ng, Harada & Russell
+        1999) toward this selector's own current state-value estimate --
+        mirrors RLStrategySelector.learn_from_episode() (see that docstring
+        for the full rationale). Each step's reward is the raw terminal
+        outcome (0 on every step except the last) plus
+        gamma*V(next_obs) - V(obs).
+
+        Unlike the tabular RL trainer this replaces, DQN's own transition
+        handling was already correct (real per-step next_obs, done only on
+        the final step) -- this only replaces the flat, constant
+        per-episode outcome reward with a denser, state-value-aware one.
+
+        Args:
+            trajectory: [(obs, action), ...] in the order they were visited.
+            outcome:    the episode's terminal reward, e.g. from
+                        CombatEnv._outcome_reward().
+        """
+        n = len(trajectory)
+        for i, (obs, action) in enumerate(trajectory):
+            is_last    = (i == n - 1)
+            next_obs   = trajectory[i + 1][0] if not is_last else obs
+            env_reward = outcome if is_last else 0.0
+
+            v_s  = self.state_value(obs)
+            v_s2 = 0.0 if is_last else self.state_value(next_obs)
+            shaped_reward = env_reward + self.gamma * v_s2 - v_s
+
+            self.update(obs, action, shaped_reward, next_obs, done=is_last)
+
     # -- Learning ------------------------------------------------------------
 
     def update(self, obs, action: Strategy, reward: float, next_obs, done: bool):
