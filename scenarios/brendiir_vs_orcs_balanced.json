@@ -1,0 +1,64 @@
+{
+  "name": "Brendiir vs Orcs (Balanced)",
+  "max_rounds": 25,
+  "map": {
+    "width": 24,
+    "height": 20,
+    "walls": [
+      [11, 7, 2, 6]
+    ],
+    "difficult_terrain": [
+      [0, 8, 5, 4],
+      [18, 3, 5, 4],
+      [18, 13, 5, 4]
+    ]
+  },
+  "positions": {
+    "Brendiir": [2, 10],
+    "Thando":   [3, 10],
+    "monsters": [
+      [20, 5], [20, 10], [20, 15],
+      [17, 7], [17, 13],
+      [16, 4], [16, 10], [16, 16],
+      [19, 3], [19, 17],
+      [14, 6], [14, 10]
+    ]
+  },
+  "players": [
+    {
+      "name": "Brendiir",
+      "classes": [["Ranger", 5]],
+      "subclasses": {"Ranger": "Gloomstalker"},
+      "stats": {"Str": 10, "Dex": 20, "Con": 14, "Int": 9, "Wis": 16, "Cha": 8},
+      "choices": [["Ranger", 2, "Fighting Style", "Archery"]],
+      "items": ["Longbow", "Studded Leather"],
+      "equipped": ["Longbow", "Studded Leather"],
+      "features": []
+    },
+    {
+      "name": "Thando",
+      "classes": [["Fighter", 5]],
+      "subclasses": {"Fighter": "Champion"},
+      "stats": {"Str": 14, "Dex": 19, "Con": 14, "Int": 8, "Wis": 12, "Cha": 10},
+      "choices": [["Fighter", 1, "Fighting Style", "Two-Weapon Fighting"]],
+      "items": ["Longsword", "Shortsword", "Chain Mail"],
+      "equipped": ["Longsword", "Shortsword", "Chain Mail"],
+      "features": []
+    }
+  ],
+  "monsters": [
+    {
+      "type": "ORC",
+      "count": 6,
+      "weapon_role": "melee"
+    },
+    {
+      "type": "GOBLIN",
+      "count": 6,
+      "weapon_role": "ranged"
+    }
+  ],
+  "rewards": {
+    "damage_scale": 0.02
+  }
+}
