@@ -1,0 +1,61 @@
+{
+  "name": "Brendiir vs Orcs (Chokepoint)",
+  "max_rounds": 25,
+  "map": {
+    "width": 20,
+    "height": 14,
+    "walls": [
+      [9, 0, 2, 6],
+      [9, 8, 2, 6]
+    ],
+    "difficult_terrain": []
+  },
+  "positions": {
+    "Brendiir": [2, 6],
+    "Thando":   [3, 6],
+    "monsters": [
+      [16, 3], [16, 6], [16, 9],
+      [14, 4], [14, 8],
+      [17, 1], [17, 11],
+      [15, 6], [13, 6],
+      [18, 6]
+    ]
+  },
+  "players": [
+    {
+      "name": "Brendiir",
+      "classes": [["Ranger", 5]],
+      "subclasses": {"Ranger": "Gloomstalker"},
+      "stats": {"Str": 10, "Dex": 20, "Con": 14, "Int": 9, "Wis": 16, "Cha": 8},
+      "choices": [["Ranger", 2, "Fighting Style", "Archery"]],
+      "items": ["Longbow", "Studded Leather"],
+      "equipped": ["Longbow", "Studded Leather"],
+      "features": []
+    },
+    {
+      "name": "Thando",
+      "classes": [["Fighter", 5]],
+      "subclasses": {"Fighter": "Champion"},
+      "stats": {"Str": 14, "Dex": 19, "Con": 14, "Int": 8, "Wis": 12, "Cha": 10},
+      "choices": [["Fighter", 1, "Fighting Style", "Two-Weapon Fighting"]],
+      "items": ["Longsword", "Shortsword", "Chain Mail"],
+      "equipped": ["Longsword", "Shortsword", "Chain Mail"],
+      "features": []
+    }
+  ],
+  "monsters": [
+    {
+      "type": "ORC",
+      "count": 5,
+      "weapon_role": "melee"
+    },
+    {
+      "type": "GOBLIN",
+      "count": 5,
+      "weapon_role": "ranged"
+    }
+  ],
+  "rewards": {
+    "damage_scale": 0.02
+  }
+}

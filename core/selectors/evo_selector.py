@@ -23,7 +23,7 @@ class EvolutionarySelector(StrategySelector):
         crossover_rate  probability of uniform crossover between two elites
     """
 
-    def __init__(self, n_features=12, pop_size=20,
+    def __init__(self, n_features=15, pop_size=20,
                  elite_frac=0.2, mutation_scale=0.1, crossover_rate=0.5):
         super().__init__()
         self.n_obs          = n_features

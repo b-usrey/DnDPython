@@ -527,6 +527,24 @@ class TeamMemory:
     _MELEE_RANGE = 1.5   # squares -- covers orthogonal (1.0) and diagonal (1.41)
     _DIST_CAP    = 10.0  # squares beyond which distance saturates to 1.0
 
+    @staticmethod
+    def _has_ranged_option(creature) -> bool:
+        """
+        True if the creature has any ranged attack available -- an equipped
+        weapon with attack_type "range", or (for template-built monsters) a
+        raw attack template with attack_type "range". Mirrors the detection
+        TacticalAI._get_weapon_profiles() uses, without needing a TacticalAI
+        instance.
+        """
+        for item in getattr(creature, "equipped_items", []):
+            if (getattr(item, "item_type", None) == "weapon"
+                    and getattr(item, "attack_type", "melee") == "range"):
+                return True
+        for atk in getattr(creature, "_attack_templates", []):
+            if atk.get("attack_type", "melee") == "range":
+                return True
+        return False
+
     def get_state_vector(
         self,
         creature,
@@ -537,7 +555,7 @@ class TeamMemory:
         """
         Build a normalised state vector for ML input.
 
-        12 features (all in [0, 1]):
+        15 features (all in [0, 1]):
 
         Core 9 -- used by RL Q-table (n_features=9) and Evo
           0  own HP ratio
@@ -555,9 +573,24 @@ class TeamMemory:
           10 focus-target HP ratio        (0 if no focus target)
           11 most-pressured ally HP ratio (0 if no ally under pressure)
 
-        Note: features 0-8 replace the previous 9-feature layout.
-        Existing .npy weights trained on the old vector must be retrained.
-        State space with n_bins=3: 3^9 = 19683 (RL) / 3^12 = 531441 (evo).
+        Identity 3 -- used by DQN and Evo (n_features=15)
+          These exist because 0-11 describe the *situation* but not *who
+          you are* -- a fighter and an archer facing the same fight get
+          the same features 0-11, so no policy can learn "kite if you're
+          the squishy one, hold the line if you're not" without something
+          that tells the two apart.
+          12 has a ranged attack option        (0 or 1)
+          13 relative tankiness -- this creature's share of the whole
+             friendly team's total max HP (own_max_hp / team_max_hp_sum)
+          14 has spell slots remaining          (1.0 for non-casters --
+             no resource to run out of, so always "ready")
+
+        Note: features 0-8 replace an earlier 9-feature layout, and 12-14
+        are new on top of the previous 12-feature layout. Existing .npy/.pt
+        weights trained on a shorter vector must be retrained.
+        State space with n_bins=3: 3^9 = 19683 (RL) / 3^12 = 531441 (evo,
+        old) / 3^15 = 14348907 (evo/DQN if fully discretised, though DQN
+        never discretises at all).
         """
         n_friendly = 1 + len(allies)
         n_enemy    = len(enemies)
@@ -623,19 +656,35 @@ class TeamMemory:
             min(a.hp / max(a.max_hp, 1) for a in pressured) if pressured else 0.0
         )
 
+        # 12: identity -- has a ranged attack option
+        is_ranged = 1.0 if self._has_ranged_option(creature) else 0.0
+
+        # 13: identity -- relative tankiness (share of the team's total max HP)
+        relative_tankiness = creature.max_hp / max(
+            sum(c.max_hp for c in all_friendly), 1
+        )
+
+        # 14: identity -- spell resources remaining (non-casters read as 1.0:
+        # no depletable resource, so always "ready")
+        spell_slots = getattr(creature, "spell_slots", None)
+        has_spell_resources = 1.0 if (spell_slots is None or spell_slots.has_slot(1)) else 0.0
+
         return [
-            own_hp_ratio,       # 0  own survivability
-            team_hp_ratio,      # 1  whole-team health
-            enemy_hp_ratio,     # 2  enemy health remaining (fight progress)
-            size_adv,           # 3  relative team size
-            nearest_dist,       # 4  range to nearest enemy
-            in_melee,           # 5  immediate melee threat
-            round_frac,         # 6  time pressure / timeout awareness
-            ally_pressure,      # 7  teammate being focused?
-            top_threat,         # 8  danger level of scariest enemy
-            melee_crowd,        # 9  how surrounded (evo)
-            target_hp,          # 10 focus-target health (evo)
-            threatened_ally_hp, # 11 most-pressured ally health (evo)
+            own_hp_ratio,          # 0  own survivability
+            team_hp_ratio,         # 1  whole-team health
+            enemy_hp_ratio,        # 2  enemy health remaining (fight progress)
+            size_adv,              # 3  relative team size
+            nearest_dist,          # 4  range to nearest enemy
+            in_melee,              # 5  immediate melee threat
+            round_frac,            # 6  time pressure / timeout awareness
+            ally_pressure,         # 7  teammate being focused?
+            top_threat,            # 8  danger level of scariest enemy
+            melee_crowd,           # 9  how surrounded (evo)
+            target_hp,             # 10 focus-target health (evo)
+            threatened_ally_hp,    # 11 most-pressured ally health (evo)
+            is_ranged,             # 12 identity: can I fight from range?
+            relative_tankiness,    # 13 identity: am I the tanky one?
+            has_spell_resources,   # 14 identity: do I still have spells?
         ]
 
     def summary(self) -> str:

@@ -1,0 +1,51 @@
+{
+  "name": "Brendiir vs Bugbears (Skirmish)",
+  "max_rounds": 25,
+  "map": {
+    "width": 18,
+    "height": 14,
+    "walls": [],
+    "difficult_terrain": [
+      [7, 5, 4, 4]
+    ]
+  },
+  "positions": {
+    "Brendiir": [2, 7],
+    "Thando":   [3, 7],
+    "monsters": [
+      [14, 4], [14, 10], [15, 7], [12, 7]
+    ]
+  },
+  "players": [
+    {
+      "name": "Brendiir",
+      "classes": [["Ranger", 5]],
+      "subclasses": {"Ranger": "Gloomstalker"},
+      "stats": {"Str": 10, "Dex": 20, "Con": 14, "Int": 9, "Wis": 16, "Cha": 8},
+      "choices": [["Ranger", 2, "Fighting Style", "Archery"]],
+      "items": ["Longbow", "Studded Leather"],
+      "equipped": ["Longbow", "Studded Leather"],
+      "features": []
+    },
+    {
+      "name": "Thando",
+      "classes": [["Fighter", 5]],
+      "subclasses": {"Fighter": "Champion"},
+      "stats": {"Str": 14, "Dex": 19, "Con": 14, "Int": 8, "Wis": 12, "Cha": 10},
+      "choices": [["Fighter", 1, "Fighting Style", "Two-Weapon Fighting"]],
+      "items": ["Longsword", "Shortsword", "Chain Mail"],
+      "equipped": ["Longsword", "Shortsword", "Chain Mail"],
+      "features": []
+    }
+  ],
+  "monsters": [
+    {
+      "type": "BUGBEAR",
+      "count": 4,
+      "weapon_role": "melee"
+    }
+  ],
+  "rewards": {
+    "damage_scale": 0.02
+  }
+}

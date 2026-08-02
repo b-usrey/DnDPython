@@ -12,7 +12,7 @@ import torch.optim as optim
 
 from core.ml_strategy import Strategy, N_STRATEGIES, StrategySelector
 
-N_OBS = 12  # full 12-feature obs vector
+N_OBS = 15  # full obs vector, including the 3 identity features (ranged/tankiness/spell resources)
 
 
 # ---------------------------------------------------------------------------
@@ -74,7 +74,7 @@ class DQNStrategySelector(StrategySelector):
       - Adam optimizer
       - Epsilon-greedy exploration
 
-    Default architecture: 12 → 64 → 32 → 5 (one output per Strategy).
+    Default architecture: 15 → 64 → 32 → 5 (one output per Strategy).
 
     Hyperparameters:
         hidden              layer sizes             (64, 32)
