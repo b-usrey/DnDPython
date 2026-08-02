@@ -1,5 +1,5 @@
 {
-  "name": "Brendiir vs Young Green Dragon (Boss Fight)",
+  "name": "Brendiir vs Young Green Dragon + Lackeys (Boss Fight)",
   "max_rounds": 25,
   "map": {
     "width": 22,
@@ -13,13 +13,13 @@
     "Brendiir": [2, 8],
     "Thando":   [3, 8],
     "monsters": [
-      [18, 8]
+      [18, 8], [16, 5], [16, 11], [15, 3], [15, 13], [14, 8], [17, 2]
     ]
   },
   "players": [
     {
       "name": "Brendiir",
-      "classes": [["Ranger", 8]],
+      "classes": [["Ranger", 5]],
       "subclasses": {"Ranger": "Gloomstalker"},
       "stats": {"Str": 10, "Dex": 20, "Con": 14, "Int": 9, "Wis": 16, "Cha": 8},
       "choices": [["Ranger", 2, "Fighting Style", "Archery"]],
@@ -29,7 +29,7 @@
     },
     {
       "name": "Thando",
-      "classes": [["Fighter", 8]],
+      "classes": [["Fighter", 5]],
       "subclasses": {"Fighter": "Champion"},
       "stats": {"Str": 14, "Dex": 19, "Con": 14, "Int": 8, "Wis": 12, "Cha": 10},
       "choices": [["Fighter", 1, "Fighting Style", "Two-Weapon Fighting"]],
@@ -42,6 +42,11 @@
     {
       "type": "YOUNG_GREEN_DRAGON",
       "count": 1
+    },
+    {
+      "type": "HOBGOBLIN",
+      "count": 6,
+      "weapon_role": "melee"
     }
   ],
   "rewards": {
