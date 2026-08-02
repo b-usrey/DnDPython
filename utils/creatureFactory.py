@@ -22,6 +22,16 @@ class CreatureFactory:
             event_manager=observer,
         )
 
+        # Multiattack: how many attacks this monster makes per Attack action
+        # (e.g. a dragon's "makes three attacks"). Reuses the same
+        # extra-attack mechanism PCs get from the Extra Attack feature --
+        # CombatManager._do_attack_action()'s `while use_extra_attack()`
+        # loop already handles firing the rest, unchanged. Defaults to 1
+        # (no multiattack) for any template that doesn't specify it.
+        multiattack = template.get("multiattack", 1)
+        creature.actions.extra_attacks = max(0, multiattack - 1)
+        creature.actions.remaining_extra_attacks = creature.actions.extra_attacks
+
         # Wire saving throw proficiencies
         from core.saving_throw import normalise_ability
         for save_ability in template.get("save_proficiencies", []):

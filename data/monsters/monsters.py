@@ -3,6 +3,7 @@ GOBLIN = {
     "hp": 12,
     "ac": 13,
     "cr": 0.25,
+    "multiattack": 1,
     "proficiency": 2,
     "stats": {"Str": 8, "Dex": 14, "Con": 10, "Int": 10, "Wis": 8, "Cha": 8},
     "attacks": [
@@ -33,6 +34,7 @@ ORC = {
     "hp": 15,
     "ac": 13,
     "cr": 0.5,
+    "multiattack": 1,
     "proficiency": 2,
     "stats": {"Str": 16, "Dex": 12, "Con": 16, "Int": 7, "Wis": 11, "Cha": 10},
     "attacks": [
@@ -53,6 +55,7 @@ HOBGOBLIN = {
     "hp": 22,
     "ac": 16,
     "cr": 0.5,
+    "multiattack": 1,
     "proficiency": 2,
     "stats": {"Str": 13, "Dex": 12, "Con": 12, "Int": 10, "Wis": 10, "Cha": 9},
     "attacks": [
@@ -82,6 +85,7 @@ BUGBEAR = {
     "hp": 27,
     "ac": 14,
     "cr": 1,
+    "multiattack": 1,
     "proficiency": 2,
     "stats": {"Str": 15, "Dex": 14, "Con": 13, "Int": 8, "Wis": 11, "Cha": 9},
     "attacks": [
@@ -111,6 +115,7 @@ OGRE = {
     "hp": 59,
     "ac": 11,
     "cr": 2,
+    "multiattack": 1,
     "proficiency": 2,
     "stats": {"Str": 19, "Dex": 8, "Con": 16, "Int": 5, "Wis": 10, "Cha": 7},
     "attacks": [
@@ -140,6 +145,7 @@ OWLBEAR = {
     "hp": 59,
     "ac": 13,
     "cr": 3,
+    "multiattack": 2,
     "proficiency": 2,
     "stats": {"Str": 20, "Dex": 12, "Con": 17, "Int": 3, "Wis": 12, "Cha": 7},
     "attacks": [
@@ -169,6 +175,7 @@ ETTIN = {
     "hp": 110,
     "ac": 12,
     "cr": 4,
+    "multiattack": 2,
     "proficiency": 3,
     "stats": {"Str": 21, "Dex": 8, "Con": 17, "Int": 3, "Wis": 10, "Cha": 8},
     "attacks": [
@@ -189,6 +196,7 @@ GHOUL = {
     "hp": 22,
     "ac": 12,
     "cr": 1,
+    "multiattack": 2,
     "proficiency": 2,
     "stats": {"Str": 15, "Dex": 15, "Con": 10, "Int": 7, "Wis": 10, "Cha": 6},
     "attacks": [
@@ -218,6 +226,7 @@ WIGHT = {
     "hp": 45,
     "ac": 14,
     "cr": 3,
+    "multiattack": 2,
     "proficiency": 2,
     "stats": {"Str": 15, "Dex": 10, "Con": 16, "Int": 10, "Wis": 13, "Cha": 15},
     "attacks": [
@@ -238,6 +247,7 @@ YOUNG_GREEN_DRAGON = {
     "hp": 110,
     "ac": 16,
     "cr": 8,
+    "multiattack": 3,
     "proficiency": 3,
     "stats": {"Str": 19, "Dex": 12, "Con": 17, "Int": 16, "Wis": 13, "Cha": 15},
     "attacks": [
