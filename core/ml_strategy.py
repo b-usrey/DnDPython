@@ -66,6 +66,22 @@ class StrategySelector:
         raise NotImplementedError
 
 
+class RandomStrategySelector(StrategySelector):
+    """
+    Picks a uniformly random Strategy every call. This is the genuine
+    "random" baseline for eval: a fresh independent choice each turn, as
+    opposed to running with no selector at all (which gets TacticalAI's
+    full rule-based behavior, including the low-HP disengage safety net --
+    a much stronger comparison that main.py's eval also reports separately
+    as the "no-selector" baseline). Scenarios were originally calibrated
+    for win-rate variance against *this* kind of random baseline.
+    """
+    def select(self, obs: list[float]) -> Strategy:
+        result = random.choice(list(Strategy))
+        self.tactic_counts[result] += 1
+        return result
+
+
 # ---------------------------------------------------------------------------
 # RewardConfig
 # ---------------------------------------------------------------------------

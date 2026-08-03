@@ -188,3 +188,64 @@ class TestImitate:
         sel.imitate(obs, actions, epochs=5, batch_size=32)
         assert sel.eps == 0.7
         assert len(sel._buffer) == 0
+
+
+# ---------------------------------------------------------------------------
+# save() / load() -- eps handling
+# ---------------------------------------------------------------------------
+
+class TestSaveLoadEps:
+    """
+    Regression tests for a real bug: load() used to unconditionally
+    overwrite self.eps from the checkpoint, silently discarding a caller-
+    configured eps in two real call sites --
+    `main.py train --eps X --load ckpt` (X was always clobbered by
+    whatever eps the checkpoint happened to have) and eval workers that
+    set `sel.eps = 0.0` *before* calling load() (immediately clobbered
+    back). load() now leaves self.eps alone unless restore_eps=True.
+    """
+    def test_load_does_not_overwrite_caller_set_eps_by_default(self, tmp_path):
+        path = str(tmp_path / "ckpt.pt")
+        saved = DQNStrategySelector(n_obs=12, eps=0.9)
+        saved.save(path)
+
+        fresh = DQNStrategySelector(n_obs=12, eps=0.3)
+        fresh.load(path)
+        assert fresh.eps == 0.3   # caller's value survives the load
+
+    def test_load_preserves_eps_set_after_construction_before_load(self, tmp_path):
+        """Mirrors the eval-worker pattern: sel.eps = 0.0 set right before
+        load() must not be clobbered back to the checkpoint's saved eps."""
+        path = str(tmp_path / "ckpt.pt")
+        saved = DQNStrategySelector(n_obs=12, eps=0.9)
+        saved.save(path)
+
+        fresh = DQNStrategySelector(n_obs=12)
+        fresh.eps = 0.0
+        fresh.load(path)
+        assert fresh.eps == 0.0
+
+    def test_restore_eps_true_pulls_checkpoint_value(self, tmp_path):
+        path = str(tmp_path / "ckpt.pt")
+        saved = DQNStrategySelector(n_obs=12, eps=0.42)
+        saved.save(path)
+
+        fresh = DQNStrategySelector(n_obs=12, eps=0.3)
+        fresh.load(path, restore_eps=True)
+        assert fresh.eps == pytest.approx(0.42)
+
+    def test_load_restores_network_weights(self, tmp_path):
+        path = str(tmp_path / "ckpt.pt")
+        saved = DQNStrategySelector(n_obs=12, eps=0.0)
+        with torch.no_grad():
+            for p in saved._online.parameters():
+                p.add_(5.0)
+        saved._target.load_state_dict(saved._online.state_dict())
+        saved.save(path)
+
+        obs = [0.5] * 12
+        expected = saved.select(obs)
+
+        fresh = DQNStrategySelector(n_obs=12, eps=0.0)
+        fresh.load(path)
+        assert fresh.select(obs) == expected

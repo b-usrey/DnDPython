@@ -200,10 +200,45 @@ class TacticalAI:
 
         # ── 4. Decide movement path ────────────────────────────────────
         path = []
+        from core.ml_strategy import Strategy as Strat
+
+        # Rule-based disengage safety net — applies regardless of which
+        # strategy is active. Without this, attaching *any* selector (even
+        # a poorly- or under-trained one) silently drops the baseline
+        # protection that "no selector at all" gets for free: a selector-
+        # driven creature would only retreat if the policy itself happens
+        # to pick RETREAT at exactly the right moment. RETREAT already
+        # reaches the same outcome via the branch below, so skip the
+        # duplicate check in that case.
+        if strategy != Strat.RETREAT and self._should_disengage(creature, battle_map):
+            retreat_from = target
+            if memory:
+                scored = [(e, memory.threat_level(e)) for e in enemies]
+                highest_threat = max(scored, key=lambda x: x[1])[0]
+                if memory.threat_level(highest_threat) > 0:
+                    retreat_from = highest_threat
+            path = self._retreat_square(creature, retreat_from, battle_map)
+            range_ok = battle_map.check_attack_range(
+                creature, target,
+                is_ranged=weapon.is_ranged,
+                normal_range=weapon.normal_range,
+                long_range=weapon.long_range,
+            )
+            if not range_ok:
+                weapon = None
+            _log.info(
+                "[%s] %s: DISENGAGE from %s — hp %.0f%% (below %.0f%% threshold)",
+                creature.team, creature.name, retreat_from.name,
+                100 * creature.hp / max(creature.max_hp, 1),
+                100 * self.DISENGAGE_THRESHOLD,
+            )
+            return TacticalDecision(
+                target=target, path=path, weapon=weapon,
+                reason="disengaging — low HP",
+            )
 
         # RETREAT strategy — always disengage regardless of HP threshold
         if strategy is not None:
-            from core.ml_strategy import Strategy as Strat
             if strategy == Strat.RETREAT:
                 retreat_from = target
                 if memory:
@@ -258,34 +293,6 @@ class TacticalAI:
                             creature=creature, stop_adjacent=True
                         )
             # After strategy overrides movement, still fall through to dash check
-        else:
-            # Rule-based disengage
-            if self._should_disengage(creature, battle_map):
-                retreat_from = target
-                if memory:
-                    scored = [(e, memory.threat_level(e)) for e in enemies]
-                    highest_threat = max(scored, key=lambda x: x[1])[0]
-                    if memory.threat_level(highest_threat) > 0:
-                        retreat_from = highest_threat
-                path = self._retreat_square(creature, retreat_from, battle_map)
-                range_ok = battle_map.check_attack_range(
-                    creature, target,
-                    is_ranged=weapon.is_ranged,
-                    normal_range=weapon.normal_range,
-                    long_range=weapon.long_range,
-                )
-                if not range_ok:
-                    weapon = None
-                _log.info(
-                    "[%s] %s: DISENGAGE from %s — hp %.0f%% (below %.0f%% threshold)",
-                    creature.team, creature.name, retreat_from.name,
-                    100 * creature.hp / max(creature.max_hp, 1),
-                    100 * self.DISENGAGE_THRESHOLD,
-                )
-                return TacticalDecision(
-                    target=target, path=path, weapon=weapon,
-                    reason="disengaging — low HP",
-                )
 
         # Default movement when no strategy overrides (or strategy is AGGRESSIVE/KITE
         # but path is still empty because we didn't enter those branches)

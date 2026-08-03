@@ -303,7 +303,21 @@ class DQNStrategySelector(StrategySelector):
         }, path)
         print(f"  [DQN] weights saved → {path}  (ε={self.eps:.3f})")
 
-    def load(self, path: str):
+    def load(self, path: str, restore_eps: bool = False):
+        """
+        Load network weights from a checkpoint.
+
+        restore_eps: if True, also overwrite self.eps with the value saved
+            in the checkpoint. Defaults to False -- eps is a property of
+            *this* run's exploration schedule (set via the constructor or
+            assigned directly, e.g. `sel.eps = 0.0` for greedy eval), not
+            of the checkpoint being loaded. The old unconditional-restore
+            behavior silently discarded a caller-supplied eps in two real
+            call sites: `main.py train --eps X --load ckpt` (X was always
+            overridden by whatever eps happened to be saved in ckpt) and
+            eval/baseline workers that set `sel.eps = 0.0` *before*
+            load() (immediately clobbered back to the checkpoint's value).
+        """
         ckpt = torch.load(path, map_location=self._device, weights_only=True)
         n_obs  = ckpt.get("n_obs", self.n_obs)
         hidden = tuple(ckpt.get("hidden_sizes", [64, 32]))
@@ -314,5 +328,6 @@ class DQNStrategySelector(StrategySelector):
         self._target.load_state_dict(ckpt["target"])
         self._online.eval()
         self._target.eval()
-        self.eps = ckpt.get("eps", self.eps_min)
+        if restore_eps:
+            self.eps = ckpt.get("eps", self.eps_min)
         print(f"  [DQN] weights loaded ← {path}  (ε={self.eps:.3f})")

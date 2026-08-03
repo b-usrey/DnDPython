@@ -66,6 +66,13 @@ def _eval_worker(args_tuple):
 
 
 def _baseline_worker(args_tuple):
+    """
+    "No selector" baseline: runs TacticalAI's own default behavior with no
+    Strategy override at all -- including its rule-based low-HP disengage
+    safety net. This is a strong baseline (it's the same behavior an
+    unmodified game session would get), not a noisy one -- see
+    _random_turn_worker for the genuinely-random comparison.
+    """
     scenario_data, team, n = args_tuple
     from core.ml_strategy import CombatEnv
     env = CombatEnv(scenario_data=scenario_data, trained_team=team, silent=True)
@@ -73,6 +80,30 @@ def _baseline_worker(args_tuple):
     total_rounds = 0
     for _ in range(n):
         env.run_episode(selector=None)
+        if env._outcome_won():
+            wins += 1
+        if env.cm is not None:
+            total_rounds += env.cm.initiative.round
+    return wins, total_rounds
+
+
+def _random_turn_worker(args_tuple):
+    """
+    Genuinely-random baseline: a fresh, independent uniformly-random
+    Strategy choice every turn. Unlike the "no selector" baseline, this
+    does NOT get the disengage safety net for free (see tactical_ai.py's
+    plan_turn) -- it's the fair comparison for "did the trained policy
+    learn to select strategies better than chance," which is what the
+    training scenarios were originally calibrated against.
+    """
+    scenario_data, team, n = args_tuple
+    from core.ml_strategy import CombatEnv, RandomStrategySelector
+    env = CombatEnv(scenario_data=scenario_data, trained_team=team, silent=True)
+    sel = RandomStrategySelector()
+    wins = 0
+    total_rounds = 0
+    for _ in range(n):
+        env.run_episode(selector=sel)
         if env._outcome_won():
             wins += 1
         if env.cm is not None:
@@ -338,8 +369,13 @@ def run_training(args):
 def run_evaluation(args):
     """
     Evaluate a trained selector with epsilon frozen at 0 (pure exploitation),
-    then compare against a random baseline so you can see how much the policy
-    actually learned above chance.
+    then compare against two baselines:
+      - no-selector: TacticalAI's own default behavior, including its
+        rule-based disengage safety net -- a strong comparison (this is
+        what the game plays like with the tactical layer switched off).
+      - per-turn random: a fresh independent random Strategy choice every
+        turn -- the fair "did the policy beat chance" comparison, and the
+        one the training scenarios were originally calibrated against.
 
     Usage:
         python main.py eval --json brendiir_vs_goblins.json --load saves/brendiir_vs_goblins_rl.npy
@@ -432,6 +468,15 @@ def run_evaluation(args):
         _submit_baseline._executor = executor
         return futs
 
+    def _submit_random_turn(chunks):
+        executor = ProcessPoolExecutor(max_workers=workers)
+        futs = [
+            executor.submit(_random_turn_worker, (scenario_data, args.team, c))
+            for c in chunks
+        ]
+        _submit_random_turn._executor = executor
+        return futs
+
     # ── Trained-policy evaluation ────────────────────────────────────────
     trained_wins, tactic_counts, trained_rounds = _run_with_progress(
         "Trained policy (ε=0)", args.n, _submit_trained
@@ -441,11 +486,21 @@ def run_evaluation(args):
     trained_avg_rounds = trained_rounds / args.n
     total_tactics      = sum(tactic_counts.values())
 
-    # ── Random baseline ──────────────────────────────────────────────────
-    random_wins, _, random_rounds = _run_with_progress(
-        "Random baseline", args.n, _submit_baseline
+    # ── No-selector baseline (TacticalAI's own default behavior, incl.
+    #    its rule-based disengage safety net -- a strong comparison) ──────
+    noselect_wins, _, noselect_rounds = _run_with_progress(
+        "No-selector baseline", args.n, _submit_baseline
     )
     _submit_baseline._executor.shutdown(wait=False)
+    noselect_rate       = noselect_wins / args.n
+    noselect_avg_rounds = noselect_rounds / args.n
+
+    # ── Per-turn random baseline (genuinely random strategy every turn --
+    #    the fair "did the policy beat chance" comparison) ────────────────
+    random_wins, _, random_rounds = _run_with_progress(
+        "Per-turn random baseline", args.n, _submit_random_turn
+    )
+    _submit_random_turn._executor.shutdown(wait=False)
     random_rate       = random_wins / args.n
     random_avg_rounds = random_rounds / args.n
 
@@ -477,27 +532,43 @@ def run_evaluation(args):
         "trained_team":    args.team,
         "trained_policy":  {**_stats_dict(trained_wins, args.n),
                             "avg_rounds": round(trained_avg_rounds, 2)},
-        "random_baseline": {**_stats_dict(random_wins, args.n),
+        "no_selector_baseline": {**_stats_dict(noselect_wins, args.n),
+                            "avg_rounds": round(noselect_avg_rounds, 2)},
+        "per_turn_random_baseline": {**_stats_dict(random_wins, args.n),
                             "avg_rounds": round(random_avg_rounds, 2)},
-        "improvement":     round(trained_rate - random_rate, 4),
+        "improvement_vs_no_selector":     round(trained_rate - noselect_rate, 4),
+        "improvement_vs_per_turn_random": round(trained_rate - random_rate, 4),
         "tactic_counts":   tactic_pcts,
         "total_tactic_turns": total_tactics,
     }
 
     # ── Print report ─────────────────────────────────────────────────────
-    delta = results["improvement"]
+    delta_noselect = results["improvement_vs_no_selector"]
+    delta_random   = results["improvement_vs_per_turn_random"]
     sep   = f"  {'─'*44}"
     print(f"\n{sep}")
     _print_stats("Trained policy:", trained_wins, args.n, trained_avg_rounds)
     print()
-    _print_stats("Random baseline:", random_wins, args.n, random_avg_rounds)
-    print(f"\n  Improvement over random : {delta:+.1%}")
-    if delta > 0.05:
+    _print_stats("No-selector baseline (default AI, incl. disengage safety net):",
+                 noselect_wins, args.n, noselect_avg_rounds)
+    print()
+    _print_stats("Per-turn random baseline (fresh random strategy each turn):",
+                 random_wins, args.n, random_avg_rounds)
+
+    print(f"\n  Improvement over per-turn-random : {delta_random:+.1%}")
+    if delta_random > 0.05:
         print("  ✓ Policy learned something meaningful above chance.")
-    elif delta > 0:
+    elif delta_random > 0:
         print("  ~ Marginal improvement — consider more training episodes.")
     else:
-        print("  ✗ Policy is no better than random — training has not converged.")
+        print("  ✗ Policy is no better than chance — training has not converged.")
+
+    print(f"\n  Delta vs no-selector baseline     : {delta_noselect:+.1%}")
+    if delta_noselect < 0:
+        print("  ⚠ Worse than doing nothing — the policy is actively hurting decisions")
+        print("    the default AI (incl. its disengage safety net) would get right for free.")
+    else:
+        print("  ✓ At or above the default AI's own behavior.")
 
     print(f"\n  Tactic selections ({total_tactics} total turns):")
     for strategy in Strategy:
@@ -529,14 +600,15 @@ def run_evaluation(args):
             )
 
             # Left: win rate comparison with 95% CI error bars
-            labels = ["Trained policy", "Random baseline"]
-            rates  = [trained_rate, random_rate]
+            labels = ["Trained\npolicy", "No-selector\nbaseline", "Per-turn\nrandom"]
+            rates  = [trained_rate, noselect_rate, random_rate]
             cis    = [
-                _confidence_interval(trained_rate, args.n),
-                _confidence_interval(random_rate,  args.n),
+                _confidence_interval(trained_rate,  args.n),
+                _confidence_interval(noselect_rate, args.n),
+                _confidence_interval(random_rate,   args.n),
             ]
-            colors = ["steelblue", "gray"]
-            bars   = ax_w.bar(labels, rates, color=colors, alpha=0.8, width=0.4)
+            colors = ["steelblue", "darkorange", "gray"]
+            bars   = ax_w.bar(labels, rates, color=colors, alpha=0.8, width=0.5)
             ax_w.errorbar(labels, rates, yerr=cis, fmt="none",
                           color="black", capsize=6, linewidth=2)
             for bar, rate in zip(bars, rates):
@@ -545,7 +617,7 @@ def run_evaluation(args):
                           ha="center", va="bottom", fontweight="bold")
             ax_w.set_ylim(0, min(1.0, max(rates) * 1.5 + 0.1))
             ax_w.set_ylabel("Win rate")
-            ax_w.set_title("Win rate vs baseline  (95% CI)")
+            ax_w.set_title("Win rate vs baselines  (95% CI)")
             ax_w.axhline(random_rate, color="gray", linestyle="--",
                          linewidth=1, alpha=0.5)
 
@@ -661,8 +733,8 @@ if __name__ == "__main__":
     dqn_g.add_argument("--dqn-target-freq",  type=int,   default=100,
                        help="Target network hard-update frequency in episodes (default: 100)")
 
-    # ── eval: evaluate a trained selector against a random baseline ──────
-    eval_p = sub.add_parser("eval", help="Evaluate a trained selector (ε=0) vs random baseline")
+    # ── eval: evaluate a trained selector against no-selector + random ────
+    eval_p = sub.add_parser("eval", help="Evaluate a trained selector (ε=0) vs no-selector and per-turn-random baselines")
     eval_p.add_argument("--json",   required=True, help="Scenario JSON filename (in scenarios/)")
     eval_p.add_argument("--load",   required=True, help="Path to trained .npy weights file")
     eval_p.add_argument("--method", choices=["rl", "evo", "dqn"], default="rl",
