@@ -121,3 +121,70 @@ class TestLearnFromEpisodeIntegration:
         ]
         sel.learn_from_episode(trajectory, outcome=1.0)
         assert len(sel._buffer) == 3
+
+
+class TestImitate:
+    def _make_dataset(self):
+        """5 well-separated, deterministic (obs -> action) demonstrations,
+        one per strategy, repeated so there's enough data to actually fit."""
+        pairs = [
+            (make_obs(0.0), Strategy.AGGRESSIVE),
+            (make_obs(0.25), Strategy.KITE),
+            (make_obs(0.5), Strategy.RETREAT),
+            (make_obs(0.75), Strategy.FOCUS_FIRE),
+            (make_obs(1.0), Strategy.PROTECT),
+        ] * 20
+        obs = [o for o, _ in pairs]
+        actions = [a for _, a in pairs]
+        return obs, actions
+
+    def test_rejects_mismatched_lengths(self):
+        sel = DQNStrategySelector(n_obs=12)
+        with pytest.raises(AssertionError):
+            sel.imitate([make_obs(0.1)], [Strategy.AGGRESSIVE, Strategy.KITE])
+
+    def test_rejects_empty_demonstrations(self):
+        sel = DQNStrategySelector(n_obs=12)
+        with pytest.raises(AssertionError):
+            sel.imitate([], [])
+
+    def test_loss_decreases_over_epochs(self):
+        sel = DQNStrategySelector(n_obs=12)
+        obs, actions = self._make_dataset()
+        losses = sel.imitate(obs, actions, epochs=30, batch_size=32)
+        assert len(losses) == 30
+        assert losses[-1] < losses[0]
+
+    def test_learns_to_reproduce_the_demonstrations(self):
+        """After training to convergence on well-separated inputs, greedy
+        action selection should match the teacher on the training points."""
+        sel = DQNStrategySelector(n_obs=12, eps=0.0, eps_min=0.0)
+        obs, actions = self._make_dataset()
+        sel.imitate(obs, actions, epochs=100, batch_size=32, lr=5e-3)
+
+        correct = 0
+        distinct_examples = [
+            (make_obs(0.0), Strategy.AGGRESSIVE),
+            (make_obs(0.25), Strategy.KITE),
+            (make_obs(0.5), Strategy.RETREAT),
+            (make_obs(0.75), Strategy.FOCUS_FIRE),
+            (make_obs(1.0), Strategy.PROTECT),
+        ]
+        for o, expected in distinct_examples:
+            if sel.select(o) == expected:
+                correct += 1
+        assert correct >= 4   # allow one miss for classification noise
+
+    def test_syncs_target_network_after_imitation(self):
+        sel = DQNStrategySelector(n_obs=12)
+        obs, actions = self._make_dataset()
+        sel.imitate(obs, actions, epochs=10, batch_size=32)
+        for p_online, p_target in zip(sel._online.parameters(), sel._target.parameters()):
+            assert torch.equal(p_online, p_target)
+
+    def test_does_not_touch_epsilon_or_buffer(self):
+        sel = DQNStrategySelector(n_obs=12, eps=0.7)
+        obs, actions = self._make_dataset()
+        sel.imitate(obs, actions, epochs=5, batch_size=32)
+        assert sel.eps == 0.7
+        assert len(sel._buffer) == 0

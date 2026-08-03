@@ -213,6 +213,76 @@ class DQNStrategySelector(StrategySelector):
         nn.utils.clip_grad_norm_(self._online.parameters(), max_norm=10.0)
         self._opt.step()
 
+    # -- Imitation pretraining -------------------------------------------------
+
+    def imitate(
+        self,
+        observations: list,
+        actions: list,
+        epochs: int = 20,
+        lr: float = 1e-3,
+        batch_size: int = 128,
+    ) -> list:
+        """
+        Behavior-cloning warm start: supervised-train the online network to
+        reproduce a teacher policy's (observation, action) demonstrations
+        (e.g. from HeuristicStrategySelector), treating action prediction as
+        a 5-way classification problem over raw Q-values via cross-entropy.
+
+        This doesn't touch epsilon, the replay buffer, or gamma -- it's
+        meant to run once, before any real RL training, so a subsequent
+        train_dqn() call starts from a sane state-dependent prior instead
+        of random weights. Syncs the target network to match afterward,
+        same as a normal target update.
+
+        Args:
+            observations: list of obs vectors (each len n_obs or longer --
+                only the first n_obs features are used, same as select()).
+            actions:      list of Strategy or int (Strategy.value) labels,
+                          same length as observations.
+            epochs:       full passes over the demonstration set.
+            lr:           Adam learning rate for this pretraining phase
+                          only -- doesn't change self._opt's configured lr.
+            batch_size:   minibatch size for the supervised passes.
+
+        Returns per-epoch average cross-entropy loss (for sanity-checking
+        that it actually decreased).
+        """
+        assert len(observations) == len(actions), "observations/actions length mismatch"
+        assert len(observations) > 0, "no demonstrations to imitate"
+
+        obs_arr = torch.tensor(
+            [list(o)[:self.n_obs] for o in observations],
+            dtype=torch.float32, device=self._device,
+        )
+        action_arr = torch.tensor(
+            [a.value if isinstance(a, Strategy) else int(a) for a in actions],
+            dtype=torch.long, device=self._device,
+        )
+
+        opt = optim.Adam(self._online.parameters(), lr=lr)
+        loss_fn = nn.CrossEntropyLoss()
+        n = obs_arr.shape[0]
+        losses = []
+
+        for epoch in range(epochs):
+            perm = torch.randperm(n, device=self._device)
+            epoch_loss = 0.0
+            n_batches = 0
+            for start in range(0, n, batch_size):
+                idx = perm[start:start + batch_size]
+                logits = self._online(obs_arr[idx])
+                loss = loss_fn(logits, action_arr[idx])
+                opt.zero_grad()
+                loss.backward()
+                opt.step()
+                epoch_loss += loss.item()
+                n_batches += 1
+            losses.append(epoch_loss / max(n_batches, 1))
+
+        self._target.load_state_dict(self._online.state_dict())
+        return losses
+
     def decay_epsilon(self):
         self.eps = max(self.eps_min, self.eps * self.eps_decay)
         self._episodes += 1
