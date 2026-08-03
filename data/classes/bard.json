@@ -1,0 +1,121 @@
+{
+  "class_name": "Bard",
+  "hit_die": 8,
+  "primary_abilities": ["Charisma"],
+  "saving_throws": ["Dexterity", "Charisma"],
+  "armor_proficiencies": ["light"],
+  "weapon_proficiencies": ["simple weapons", "hand crossbows", "longswords", "rapiers", "shortswords"],
+  "tool_proficiencies": ["three musical instruments"],
+  "skill_choices": {
+    "choose": 3,
+    "options": ["Any three skills"]
+  },
+  "multiclassing": {
+    "requirements": { "Charisma": 13 },
+    "armor_proficiencies": ["light"],
+    "weapon_proficiencies": []
+  },
+  "features_by_level": {
+    "1": [
+      { "name": "Spellcasting", "description": "Cast bard spells using CHA." },
+      { "name": "Bardic Inspiration", "description": "Bonus action: buff an ally's next attack roll (d6, scales with level)." },
+      { "name": "Vicious Mockery", "description": "Cantrip: WIS save, psychic damage + disadvantage on target's next attack." }
+    ],
+    "2": [
+      { "name": "Jack of All Trades", "description": "Add half proficiency to ability checks that don't already include it. Non-combat in this sim." },
+      { "name": "Song of Rest", "description": "Extra healing during a short rest. Non-combat." },
+      { "name": "Healing Word", "description": "1st level, bonus action: 1d4+mod HP when an ally is below 35%." },
+      { "name": "Thunderwave", "description": "1st level: STR save, 2d8 thunder, 15ft cube." }
+    ],
+    "3": [
+      {
+        "name": "Bard College",
+        "options": ["College of Lore", "College of Valor"],
+        "description": "Choose subclass. Non-combat in this sim except where a subclass feature is listed below."
+      },
+      { "name": "Expertise", "description": "Double proficiency on two skills. Non-combat." },
+      { "name": "Cure Wounds", "description": "1st level: 1d8+mod HP when below 25%." },
+      { "name": "Hold Person", "description": "2nd level: WIS save or paralyzed; save again each turn." }
+    ],
+    "4": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "5": [
+      { "name": "Font of Inspiration", "description": "Bardic Inspiration recharges on a short rest. Not simulated -- rest cycles aren't modeled mid-combat; uses stay at CHA-mod per combat." }
+    ],
+    "6": [
+      { "name": "Countercharm", "description": "Advantage vs. frightened/charmed for nearby allies. Non-combat in this sim." }
+    ],
+    "8": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "10": [
+      { "name": "Bard College Feature", "description": "Subclass feature at level 10." },
+      { "name": "Expertise", "description": "Double proficiency on two more skills. Non-combat." }
+    ],
+    "12": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "14": [
+      { "name": "Magical Secrets", "description": "Learn two spells from any class. Not simulated -- would require ad-hoc spell selection at build time." }
+    ],
+    "16": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "18": [
+      { "name": "Magical Secrets", "description": "Learn two more spells from any class. Not simulated." }
+    ],
+    "19": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "20": [
+      { "name": "Superior Inspiration", "description": "Regain one Bardic Inspiration use when you roll initiative with none left. Non-combat in this sim." }
+    ]
+  },
+  "subclasses": {
+    "collegeoflore": {
+      "features_by_level": {
+        "3": [
+          { "name": "Bonus Proficiencies", "description": "Three more skill proficiencies. Non-combat." },
+          { "name": "Cutting Words", "description": "Reaction: subtract a Bardic Inspiration die from an enemy's attack/damage/check. Not simulated -- would need roll-interception aimed at enemies, deferred." }
+        ],
+        "6": [
+          { "name": "Additional Magical Secrets", "description": "Learn two spells from any class. Not simulated." }
+        ],
+        "14": [
+          { "name": "Peerless Skill", "description": "Add Bardic Inspiration to your own failed ability check. Non-combat." }
+        ]
+      }
+    },
+    "collegeofvalor": {
+      "features_by_level": {
+        "3": [
+          { "name": "Combat Inspiration", "description": "Bardic Inspiration die can also boost damage or AC. Folded into Bardic Inspiration's flat EV bonus in this sim." },
+          { "name": "Armor Proficiencies", "description": "Medium armor, shields, martial weapons. Non-combat in this sim (no melee-build support authored yet)." }
+        ],
+        "6": [
+          { "name": "Extra Attack", "description": "2 attacks per action." }
+        ],
+        "14": [
+          { "name": "Battle Magic", "description": "Bonus action attack after casting a bard spell. Not simulated." }
+        ]
+      }
+    }
+  },
+  "spellcasting": {
+    "spell_list": "bard",
+    "spellcasting_ability": "Charisma",
+    "progression": {
+      "1":  { "slots": [2] },
+      "2":  { "slots": [3] },
+      "3":  { "slots": [4, 2] },
+      "4":  { "slots": [4, 3] },
+      "5":  { "slots": [4, 3, 2] },
+      "6":  { "slots": [4, 3, 3] },
+      "7":  { "slots": [4, 3, 3, 1] },
+      "8":  { "slots": [4, 3, 3, 2] },
+      "9":  { "slots": [4, 3, 3, 3, 1] },
+      "10": { "slots": [4, 3, 3, 3, 2] },
+      "11": { "slots": [4, 3, 3, 3, 2] },
+      "12": { "slots": [4, 3, 3, 3, 2] },
+      "13": { "slots": [4, 3, 3, 3, 2, 1] },
+      "14": { "slots": [4, 3, 3, 3, 2, 1] },
+      "15": { "slots": [4, 3, 3, 3, 2, 1, 1] },
+      "16": { "slots": [4, 3, 3, 3, 2, 1, 1] },
+      "17": { "slots": [4, 3, 3, 3, 2, 1, 1, 1] },
+      "18": { "slots": [4, 3, 3, 3, 3, 1, 1, 1] },
+      "19": { "slots": [4, 3, 3, 3, 3, 2, 1, 1] },
+      "20": { "slots": [4, 3, 3, 3, 3, 2, 2, 1] }
+    }
+  }
+}

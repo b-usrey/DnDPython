@@ -575,10 +575,10 @@ class TacticalAI:
             avg = 5.0
         avg = max(avg, 0.0)
 
-        # Advantage from target conditions: paralyzed/restrained/blinded
+        # Advantage from target conditions: paralyzed/restrained/blinded/stunned
         _hc = getattr(target, "has_condition", None)
         has_advantage = bool(_hc) and (
-            _hc("paralyzed") or _hc("restrained") or _hc("blinded")
+            _hc("paralyzed") or _hc("restrained") or _hc("blinded") or _hc("stunned")
         )
 
         p_straight = hit_probability(weapon.attack_bonus, target.ac)

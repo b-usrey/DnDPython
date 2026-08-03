@@ -1,0 +1,119 @@
+{
+  "class_name": "Monk",
+  "hit_die": 8,
+  "primary_abilities": ["Dexterity", "Wisdom"],
+  "saving_throws": ["Strength", "Dexterity"],
+  "armor_proficiencies": [],
+  "weapon_proficiencies": ["simple weapons", "shortswords"],
+  "tool_proficiencies": ["one artisan's tools or musical instrument"],
+  "skill_choices": {
+    "choose": 2,
+    "options": ["Acrobatics", "Athletics", "History", "Insight", "Religion", "Stealth"]
+  },
+  "multiclassing": {
+    "requirements": { "Dexterity": 13, "Wisdom": 13 },
+    "armor_proficiencies": [],
+    "weapon_proficiencies": ["simple weapons", "shortswords"]
+  },
+  "features_by_level": {
+    "1": [
+      { "name": "Martial Arts", "description": "Scaling unarmed/monk-weapon die (d4->d6->d8->d10); can use DEX instead of STR; bonus-action unarmed strike after the Attack action." },
+      { "name": "Unarmored Defense (Monk)", "description": "AC = 10 + DEX + WIS when not wearing armor or a shield." }
+    ],
+    "2": [
+      { "name": "Ki", "description": "Ki point pool (= monk level) fueling Flurry of Blows, Patient Defense, Step of the Wind." },
+      { "name": "Unarmored Movement", "description": "+10ft speed while unarmored, scaling with level." },
+      { "name": "Patient Defense", "description": "1 ki, bonus action: Dodge. Not simulated -- overlaps with the tactical AI's retreat strategy." },
+      { "name": "Step of the Wind", "description": "1 ki, bonus action: Disengage or Dash, double jump distance. Not simulated -- overlaps with kite strategy." }
+    ],
+    "3": [
+      {
+        "name": "Monastic Tradition",
+        "options": ["Way of the Open Hand", "Way of Shadow", "Way of the Four Elements"],
+        "description": "Choose subclass. Non-combat in this sim except where a subclass feature is listed below."
+      },
+      { "name": "Deflect Missiles", "description": "Reaction: reduce damage from a ranged weapon attack by 1d10+DEX+monk level." }
+    ],
+    "4": [
+      { "name": "ASI", "description": "Ability Score Improvement or Feat." },
+      { "name": "Slow Fall", "description": "Reduce falling damage by 5x monk level. Non-combat in this sim." }
+    ],
+    "5": [
+      { "name": "Extra Attack", "description": "2 attacks per action." },
+      { "name": "Stunning Strike", "description": "1 ki on hit: CON save or stunned until the end of your next turn." }
+    ],
+    "6": [
+      { "name": "Ki-Empowered Strikes", "description": "Unarmed strikes count as magical. Non-combat in this sim (no magic-resistant monsters authored yet)." }
+    ],
+    "7": [
+      { "name": "Evasion", "description": "No damage on a successful DEX save, half on a failed one. Not simulated for Monk yet -- shares the Rogue/Ranger Evasion feature name but not wired to this class." },
+      { "name": "Stillness of Mind", "description": "End your own charmed/frightened condition as an action. Non-combat in this sim." }
+    ],
+    "8": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "9": [
+      { "name": "Unarmored Movement Improvement", "description": "Move along vertical surfaces/across liquids. Non-combat in this sim." }
+    ],
+    "10": [
+      { "name": "Purity of Body", "description": "Immune to disease and poison. Non-combat in this sim." }
+    ],
+    "12": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "13": [
+      { "name": "Tongue of the Sun and Moon", "description": "Understand and be understood by all creatures. Non-combat." }
+    ],
+    "14": [
+      { "name": "Diamond Soul", "description": "Proficiency in all saving throws; spend 1 ki to reroll a failed save. Not simulated -- would need a save-reroll hook symmetrical to Lucky's, deferred." }
+    ],
+    "15": [
+      { "name": "Timeless Body", "description": "Age much more slowly; no need for food or water. Non-combat." }
+    ],
+    "16": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "18": [
+      { "name": "Empty Body", "description": "Spend 4 ki: invisible for 1 minute. Not simulated -- would need an invisibility-application hook, deferred." }
+    ],
+    "19": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "20": [
+      { "name": "Perfect Self", "description": "Regain 4 ki if you have none left when you roll initiative. Non-combat in this sim." }
+    ]
+  },
+  "subclasses": {
+    "wayoftheopenhand": {
+      "features_by_level": {
+        "3": [
+          { "name": "Open Hand Technique", "description": "Flurry of Blows hits impose prone/push/no-reaction. Not simulated -- would need per-hit rider effects on Flurry, deferred." }
+        ],
+        "6": [
+          { "name": "Wholeness of Body", "description": "Action: heal 3x monk level HP once per long rest. Not simulated -- rest cycles aren't modeled mid-combat." }
+        ],
+        "11": [
+          { "name": "Tranquility", "description": "Sanctuary effect between long rests. Non-combat in this sim." }
+        ],
+        "17": [
+          { "name": "Quivering Palm", "description": "Ki-based delayed death effect. Not simulated -- deferred." }
+        ]
+      }
+    },
+    "wayofshadow": {
+      "features_by_level": {
+        "3": [
+          { "name": "Shadow Arts", "description": "Spend 2 ki to cast Darkness/Darkvision/Pass without Trace/Silence. Not simulated -- deferred." }
+        ],
+        "6": [
+          { "name": "Shadow Step", "description": "Teleport between dim light/darkness with advantage on next attack. Not simulated -- deferred." }
+        ],
+        "11": [
+          { "name": "Cloak of Shadows", "description": "Become invisible in dim light/darkness. Not simulated -- deferred." }
+        ],
+        "17": [
+          { "name": "Opportunist", "description": "Reaction attack when an ally hits a creature within 5ft. Not simulated -- deferred." }
+        ]
+      }
+    },
+    "wayofthefourelements": {
+      "features_by_level": {
+        "3": [
+          { "name": "Disciple of the Elements", "description": "Spend ki on elemental spell-like attacks (Fangs of the Fire Snake, Water Whip, etc.). Not simulated -- deferred; this subclass functions as a plain monk in this sim." }
+        ]
+      }
+    }
+  }
+}
