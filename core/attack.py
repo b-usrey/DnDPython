@@ -4,6 +4,24 @@ import random
 VERBOSE = True
 
 
+def hit_probability(to_hit_bonus: int, target_ac: int) -> float:
+    """
+    P(a d20 attack roll + to_hit_bonus meets or beats target_ac), clamped to
+    [0.05, 0.95] for the natural-1-always-misses / natural-20-always-hits
+    rule. Ignores crit-range widening (e.g. Improved Critical) -- that only
+    changes damage EV via more frequent doubling, not whether the attack
+    connects at all, and isn't worth the extra precision at the granularity
+    this estimate is used for (AI weapon/feat selection, not real resolution).
+
+    Shared by TacticalAI._score_weapon (choosing between weapons) and any
+    feat that trades accuracy for damage (Sharpshooter, Great Weapon
+    Master) so both use the same hit-chance math instead of two formulas
+    that could quietly drift apart.
+    """
+    needed = target_ac - to_hit_bonus
+    return max(0.05, min(0.95, (21 - max(1, min(20, needed))) / 20.0))
+
+
 class Attack(ABC):
     def __init__(self, attacker, target, base_dice, item=None, range=False):
         self.attacker   = attacker

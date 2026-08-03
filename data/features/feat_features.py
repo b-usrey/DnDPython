@@ -23,7 +23,7 @@ Implemented:
 """
 import random
 from data.features.base import Feature
-from core.attack import WeaponAttack
+from core.attack import WeaponAttack, hit_probability
 
 # ── Helpers ───────────────────────────────────────────────────────────────────
 
@@ -54,17 +54,44 @@ def _wielded_weapon(creature, melee=True):
 # Original feat
 # =============================================================================
 
+def _worth_the_power_attack_trade(attack, target) -> bool:
+    """
+    Shared EV comparison for Sharpshooter/Great Weapon Master's -5/+10
+    trade: take it only when it raises expected damage, using the
+    attacker's actual to-hit bonus and the target's actual AC -- not a
+    flat target-HP threshold, which gets the same answer regardless of
+    whether the attacker can realistically land the harder shot at all.
+
+    Expected damage is capped at the target's remaining HP (same pattern
+    used for AOE placement scoring) so the trade isn't taken to pile
+    overkill damage onto a target the normal hit would already finish --
+    once both options are HP-capped to the same value, the -5 accuracy
+    hit no longer buys anything, and the EV comparison naturally declines
+    the trade without needing a separate "is this overkill" check.
+    """
+    num, sides = attack.base_dice
+    avg_damage = num * (sides + 1) / 2.0 + attack.damage_mod
+    target_hp  = getattr(target, "hp", avg_damage + 10)
+
+    p_normal = hit_probability(attack.to_hit_mod, target.ac)
+    p_traded = hit_probability(attack.to_hit_mod - 5, target.ac)
+
+    ev_normal = p_normal * min(avg_damage, target_hp)
+    ev_traded = p_traded * min(avg_damage + 10, target_hp)
+
+    return ev_traded > ev_normal
+
+
 class Sharpshooter(Feature):
     """
     Feat. Before making a ranged weapon attack you can opt to take
     -5 to hit in exchange for +10 damage on a hit.
 
-    The AI uses it when the target's HP is above SHARPSHOOTER_HP_THRESHOLD
-    (default 15) — i.e. the +10 damage is a meaningful fraction of their
-    remaining health, making the miss risk worthwhile.
+    The AI takes the trade only when it raises expected damage -- see
+    _worth_the_power_attack_trade() -- rather than using a flat target-HP
+    threshold that ignored the attacker's own accuracy and the target's AC.
     """
     name = "Sharpshooter"
-    SHARPSHOOTER_HP_THRESHOLD = 15
 
     EVENT_MAP = {"attack": "on_attack"}
 
@@ -78,7 +105,7 @@ class Sharpshooter(Feature):
         if not isinstance(attack, WeaponAttack) or not attack.range:
             return
 
-        if getattr(target, "hp", 0) > self.SHARPSHOOTER_HP_THRESHOLD:
+        if _worth_the_power_attack_trade(attack, target):
             attack.to_hit_mod -= 5
             attack.damage_mod += 10
             attack.tags.add("sharpshooter")
@@ -92,13 +119,14 @@ class GreatWeaponMaster(Feature):
     """
     Two effects:
     1. -5/+10 trade: when making a melee attack with a heavy weapon, the AI
-       takes -5 to hit for +10 damage if the target has substantial HP left.
+       takes the trade only when it raises expected damage -- see
+       _worth_the_power_attack_trade() -- rather than a flat target-HP
+       threshold that ignored the attacker's own accuracy and the target's AC.
     2. Bonus attack: when you score a critical hit or reduce a creature to 0 HP
        with a melee weapon attack, use your bonus action to make one more
        melee weapon attack.
     """
     name = "Great Weapon Master"
-    GWM_HP_THRESHOLD = 15
 
     EVENT_MAP = {
         "attack":       "on_attack",
@@ -116,7 +144,7 @@ class GreatWeaponMaster(Feature):
         item = attack.item
         if not item or "heavy" not in getattr(item, "properties", []):
             return
-        if getattr(target, "hp", 0) > self.GWM_HP_THRESHOLD:
+        if _worth_the_power_attack_trade(attack, target):
             attack.to_hit_mod -= 5
             attack.damage_mod += 10
             attack.tags.add("great_weapon_master")

@@ -23,6 +23,8 @@ from __future__ import annotations
 import logging
 from typing import TYPE_CHECKING
 
+from core.attack import hit_probability
+
 if TYPE_CHECKING:
     from core.creature import Creature
     from core.battle_map import BattleMap
@@ -579,8 +581,7 @@ class TacticalAI:
             _hc("paralyzed") or _hc("restrained") or _hc("blinded")
         )
 
-        needed     = target.ac - weapon.attack_bonus
-        p_straight = max(0.05, min(0.95, (21 - max(1, min(20, needed))) / 20.0))
+        p_straight = hit_probability(weapon.attack_bonus, target.ac)
         p_hit      = (1.0 - (1.0 - p_straight) ** 2) if has_advantage else p_straight
         score      = p_hit * avg
 
