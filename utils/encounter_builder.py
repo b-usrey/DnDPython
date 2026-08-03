@@ -118,6 +118,64 @@ def assess_difficulty(adjusted_xp: float, party_levels: list) -> str:
     return achieved
 
 
+def score_encounter(
+    party_levels: list,
+    monsters: list,
+    monster_pool: dict | None = None,
+) -> dict:
+    """
+    Score a FIXED encounter against the DMG's XP-budget difficulty math --
+    the reverse of build_encounter's job (which searches for a composition
+    hitting a target). Used to answer "what does the book think of this
+    encounter I already have," e.g. for a saved scenario.
+
+    Args:
+        party_levels: character levels, e.g. [3, 3, 4, 3]
+        monsters:     scenario-JSON-shaped list, e.g.
+                      [{"type": "GOBLIN", "count": 4}, ...]
+        monster_pool: {type_key: monster_data} -- defaults to the full
+                      MONSTER_REGISTRY.
+
+    Returns a dict: base_xp, adjusted_xp, multiplier, monster_count,
+    party_size, party_xp_thresholds (all 4 bands), difficulty_achieved,
+    and skipped_types (monster type keys with no usable 'cr' -- e.g. an
+    unregistered homebrew monster -- excluded from the XP math rather
+    than raising, so the rest of the encounter still gets scored).
+    """
+    if not party_levels:
+        raise ValueError("party_levels must be non-empty")
+
+    pool = monster_pool if monster_pool is not None else MONSTER_REGISTRY
+
+    base_xp = 0.0
+    monster_count = 0
+    skipped_types = []
+    for entry in monsters:
+        mtype = entry.get("type", "").upper()
+        count = entry.get("count", 1)
+        data = pool.get(mtype)
+        if data is None or data.get("cr") is None:
+            skipped_types.append(mtype)
+            continue
+        base_xp += monster_xp(data) * count
+        monster_count += count
+
+    party_size = len(party_levels)
+    multiplier = _party_adjusted_multiplier(monster_count, party_size) if monster_count else 1.0
+    adjusted_xp = base_xp * multiplier
+
+    return {
+        "base_xp":             base_xp,
+        "adjusted_xp":         adjusted_xp,
+        "multiplier":          multiplier,
+        "monster_count":       monster_count,
+        "party_size":          party_size,
+        "party_xp_thresholds": {d: party_xp_threshold(party_levels, d) for d in DIFFICULTIES},
+        "difficulty_achieved": assess_difficulty(adjusted_xp, party_levels) if monster_count else "trivial",
+        "skipped_types":       skipped_types,
+    }
+
+
 def _distribute(total: int, n: int, rng: random.Random) -> list:
     """Split `total` into `n` positive integers summing to `total`, randomly."""
     counts = [1] * n

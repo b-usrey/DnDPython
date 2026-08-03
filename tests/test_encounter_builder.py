@@ -19,6 +19,7 @@ from utils.encounter_builder import (
     build_encounter,
     monster_xp,
     party_xp_threshold,
+    score_encounter,
 )
 
 
@@ -213,3 +214,93 @@ class TestBuildEncounterComposition:
             target = result["target_xp"]
             assert result["adjusted_xp"] <= target * 2.5
             assert result["monsters"]   # never returns an empty encounter
+
+
+# ---------------------------------------------------------------------------
+# score_encounter
+# ---------------------------------------------------------------------------
+
+class TestScoreEncounter:
+    def test_known_value_matches_build_encounter_case(self):
+        """Same fixture as the deterministic BUGBEAR build_encounter case --
+        2 Bugbears (200 XP each) vs a 4x lvl-3 party -> 1.5x multiplier."""
+        pool = {"BUGBEAR": {"cr": 1}}
+        result = score_encounter(
+            [3, 3, 3, 3], [{"type": "BUGBEAR", "count": 2}], monster_pool=pool,
+        )
+        assert result["base_xp"] == 400
+        assert result["multiplier"] == 1.5
+        assert result["adjusted_xp"] == 600
+        assert result["monster_count"] == 2
+        assert result["party_size"] == 4
+        assert result["difficulty_achieved"] == "medium"
+        assert result["skipped_types"] == []
+
+    def test_thresholds_match_party_xp_threshold(self):
+        pool = {"BUGBEAR": {"cr": 1}}
+        result = score_encounter(
+            [5, 5], [{"type": "BUGBEAR", "count": 1}], monster_pool=pool,
+        )
+        for band in DIFFICULTIES:
+            assert result["party_xp_thresholds"][band] == party_xp_threshold([5, 5], band)
+
+    def test_unregistered_monster_type_is_skipped_not_raised(self):
+        pool = {"BUGBEAR": {"cr": 1}}
+        result = score_encounter(
+            [5, 5],
+            [{"type": "BUGBEAR", "count": 1}, {"type": "NOT_A_REAL_MONSTER", "count": 3}],
+            monster_pool=pool,
+        )
+        assert result["skipped_types"] == ["NOT_A_REAL_MONSTER"]
+        assert result["monster_count"] == 1   # only the real monster counted
+        assert result["base_xp"] == 200
+
+    def test_monster_missing_cr_is_skipped(self):
+        pool = {"NO_CR_MONSTER": {}}
+        result = score_encounter(
+            [5, 5], [{"type": "NO_CR_MONSTER", "count": 2}], monster_pool=pool,
+        )
+        assert result["skipped_types"] == ["NO_CR_MONSTER"]
+        assert result["monster_count"] == 0
+        assert result["base_xp"] == 0
+
+    def test_empty_monster_list_is_trivial(self):
+        pool = {"BUGBEAR": {"cr": 1}}
+        result = score_encounter([5, 5], [], monster_pool=pool)
+        assert result["monster_count"] == 0
+        assert result["base_xp"] == 0
+        assert result["multiplier"] == 1.0
+        assert result["adjusted_xp"] == 0
+        assert result["difficulty_achieved"] == "trivial"
+
+    def test_empty_party_levels_raises(self):
+        with pytest.raises(ValueError):
+            score_encounter([], [{"type": "BUGBEAR", "count": 1}])
+
+    def test_lowercase_and_mixed_case_type_keys_are_normalised(self):
+        pool = {"BUGBEAR": {"cr": 1}}
+        result = score_encounter(
+            [5, 5], [{"type": "bugbear", "count": 1}], monster_pool=pool,
+        )
+        assert result["skipped_types"] == []
+        assert result["monster_count"] == 1
+
+    def test_round_trips_with_build_encounter(self):
+        """Scoring an encounter that build_encounter just produced should
+        reproduce the exact same adjusted_xp and difficulty_achieved."""
+        from data.monsters.monsters import MONSTER_REGISTRY
+        built = build_encounter(
+            [4, 4, 4, 4], difficulty="hard",
+            monster_pool=MONSTER_REGISTRY, rng=random.Random(11),
+        )
+        scored = score_encounter(
+            [4, 4, 4, 4], built["monsters"], monster_pool=MONSTER_REGISTRY,
+        )
+        assert scored["adjusted_xp"] == pytest.approx(built["adjusted_xp"])
+        assert scored["difficulty_achieved"] == built["difficulty_achieved"]
+        assert scored["skipped_types"] == []
+
+    def test_uses_real_monster_registry_by_default(self):
+        result = score_encounter([1, 1], [{"type": "GOBLIN", "count": 4}])
+        assert result["base_xp"] == 200   # 4 * 50 XP (CR 1/4)
+        assert result["skipped_types"] == []
