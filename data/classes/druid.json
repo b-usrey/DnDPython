@@ -1,0 +1,109 @@
+{
+  "class_name": "Druid",
+  "hit_die": 8,
+  "primary_abilities": ["Wisdom"],
+  "saving_throws": ["Intelligence", "Wisdom"],
+  "armor_proficiencies": ["light", "medium", "shields (non-metal)"],
+  "weapon_proficiencies": ["clubs", "daggers", "darts", "javelins", "maces",
+                           "quarterstaffs", "scimitars", "sickles", "slings", "spears"],
+  "tool_proficiencies": ["Herbalism Kit"],
+  "skill_choices": {
+    "choose": 2,
+    "options": ["Arcana", "Animal Handling", "Insight", "Medicine",
+                "Nature", "Perception", "Religion", "Survival"]
+  },
+  "multiclassing": {
+    "requirements": { "Wisdom": 13 },
+    "armor_proficiencies": ["light", "medium", "shields (non-metal)"],
+    "weapon_proficiencies": []
+  },
+  "features_by_level": {
+    "1": [
+      { "name": "Spellcasting", "description": "Cast druid spells using WIS." },
+      { "name": "Poison Spray", "description": "Cantrip: CON save, 1d12 poison, 10ft range." },
+      { "name": "Druidic",      "description": "Secret druidic language. Non-combat." }
+    ],
+    "2": [
+      {
+        "name": "Wild Shape",
+        "description": "Transform into a beast you've seen. Not simulated in combat yet -- Druids fight using their own statblock and spells in this sim."
+      },
+      {
+        "name": "Druid Circle",
+        "options": ["Circle of the Land", "Circle of the Moon"],
+        "description": "Choose subclass. Non-combat in this sim except where a subclass feature is listed below."
+      },
+      { "name": "Healing Word", "description": "1st level, bonus action: 1d4+mod HP when an ally is below 35%." }
+    ],
+    "3": [
+      { "name": "Moonbeam",     "description": "2nd level: CON save, 2d10 radiant around the caster each turn." },
+      { "name": "Cure Wounds", "description": "1st level: 1d8+mod HP when below 25%." }
+    ],
+    "4": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "5": [ { "name": "Blight", "description": "4th level: CON save, 8d8 necrotic." } ],
+    "8": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "12": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "16": [ { "name": "ASI", "description": "Ability Score Improvement or Feat." } ],
+    "18": [
+      { "name": "Timeless Body", "description": "Age much more slowly; no need to eat or drink at length. Non-combat." }
+    ],
+    "20": [
+      { "name": "Archdruid", "description": "Unlimited Wild Shape; ignore verbal/somatic/non-costly-material components. Non-combat in this sim." }
+    ]
+  },
+  "subclasses": {
+    "circleoftheland": {
+      "features_by_level": {
+        "2": [
+          { "name": "Bonus Cantrip", "description": "Learn one extra druid cantrip. Non-combat in this sim." },
+          { "name": "Natural Recovery", "description": "Short rest: recover spell slots. Non-combat." }
+        ],
+        "6": [
+          { "name": "Land's Stride", "description": "Move through nonmagical difficult terrain at no cost. Non-combat in this sim." }
+        ]
+      }
+    },
+    "circleofthemoon": {
+      "features_by_level": {
+        "2": [
+          { "name": "Combat Wild Shape", "description": "Wild Shape as a bonus action; spend a spell slot to heal while shapeshifted. Not simulated -- see Wild Shape." }
+        ],
+        "6": [
+          { "name": "Primal Strike", "description": "Wild Shape attacks count as magical. Non-combat in this sim." }
+        ],
+        "10": [
+          { "name": "Elemental Wild Shape", "description": "Wild Shape into an air/earth/fire/water elemental. Not simulated." }
+        ],
+        "14": [
+          { "name": "Thousand Forms", "description": "Cast Alter Self at will. Non-combat in this sim." }
+        ]
+      }
+    }
+  },
+  "spellcasting": {
+    "spell_list": "druid",
+    "spellcasting_ability": "Wisdom",
+    "progression": {
+      "1":  { "slots": [2] },
+      "2":  { "slots": [3] },
+      "3":  { "slots": [4, 2] },
+      "4":  { "slots": [4, 3] },
+      "5":  { "slots": [4, 3, 2] },
+      "6":  { "slots": [4, 3, 3] },
+      "7":  { "slots": [4, 3, 3, 1] },
+      "8":  { "slots": [4, 3, 3, 2] },
+      "9":  { "slots": [4, 3, 3, 3, 1] },
+      "10": { "slots": [4, 3, 3, 3, 2] },
+      "11": { "slots": [4, 3, 3, 3, 2] },
+      "12": { "slots": [4, 3, 3, 3, 2] },
+      "13": { "slots": [4, 3, 3, 3, 2, 1] },
+      "14": { "slots": [4, 3, 3, 3, 2, 1] },
+      "15": { "slots": [4, 3, 3, 3, 2, 1, 1] },
+      "16": { "slots": [4, 3, 3, 3, 2, 1, 1] },
+      "17": { "slots": [4, 3, 3, 3, 2, 1, 1, 1] },
+      "18": { "slots": [4, 3, 3, 3, 3, 1, 1, 1] },
+      "19": { "slots": [4, 3, 3, 3, 3, 2, 1, 1] },
+      "20": { "slots": [4, 3, 3, 3, 3, 2, 2, 1] }
+    }
+  }
+}
