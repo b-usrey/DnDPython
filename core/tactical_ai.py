@@ -265,7 +265,17 @@ class TacticalAI:
                     reason=f"strategy: RETREAT",
                 )
             elif strategy == Strat.AGGRESSIVE:
-                path = self._melee_move(creature, target, battle_map)
+                # Respect the weapon type _pick_weapon already chose, same
+                # as the no-strategy default below -- AGGRESSIVE means
+                # "commit to this target," not "always close to melee."
+                # Forcing melee unconditionally used to march ranged
+                # attackers into range they didn't need to give up, which
+                # is why AGGRESSIVE (the strategy this policy leans on
+                # most) could underperform even the plain default AI.
+                if weapon.is_ranged:
+                    path = self._ranged_move(creature, target, weapon, battle_map)
+                else:
+                    path = self._melee_move(creature, target, battle_map)
             elif strategy == Strat.KITE:
                 path = self._ranged_move(creature, target, weapon, battle_map)
             elif strategy == Strat.FOCUS_FIRE:
