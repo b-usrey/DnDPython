@@ -24,6 +24,10 @@ Schema — one record per line
                  target_ac, hit, critical, damage, trigger
                  trigger: "action" | "extra_attack" | "bonus_action"
                           | "opportunity_attack"
+    save_damage  round, creature, team, target, damage, damage_type,
+                 save_ability, save_success -- damage from save-based
+                 spells (Fireball, Thunderwave, PoisonSpray, etc.), which
+                 don't go through the attack-roll pipeline above at all
     bonus_action round, creature, team, ability, target (non-attack BAs)
     downed       round, creature, team
     combat_end   round, winner_team, survivors
@@ -45,13 +49,14 @@ class CombatLogger:
         self.records: list[dict] = []
         self._pending_oa  = False   # flag: next attack_resolved is an OA
 
-        event_bus.subscribe("TurnStarted",        self._on_turn_started)
-        event_bus.subscribe("attack_resolved",     self._on_attack_resolved)
-        event_bus.subscribe("opportunity_attack",  self._on_opportunity_attack)
-        event_bus.subscribe("move",                self._on_move)
-        event_bus.subscribe("bonus_action",        self._on_bonus_action)
-        event_bus.subscribe("creature_downed",     self._on_downed)
-        event_bus.subscribe("CombatEnded",         self._on_combat_ended)
+        event_bus.subscribe("TurnStarted",          self._on_turn_started)
+        event_bus.subscribe("attack_resolved",      self._on_attack_resolved)
+        event_bus.subscribe("opportunity_attack",   self._on_opportunity_attack)
+        event_bus.subscribe("saving_throw_resolved", self._on_saving_throw_resolved)
+        event_bus.subscribe("move",                 self._on_move)
+        event_bus.subscribe("bonus_action",         self._on_bonus_action)
+        event_bus.subscribe("creature_downed",      self._on_downed)
+        event_bus.subscribe("CombatEnded",          self._on_combat_ended)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -132,6 +137,23 @@ class CombatLogger:
             "damage":    attack.result.get("damage", 0) if attack.result.get("hit") else 0,
             "trigger":   trigger,
             "tags":      sorted(attack.tags),
+        })
+
+    def _on_saving_throw_resolved(self, data: dict) -> None:
+        caster = data.get("caster")
+        result = data.get("result")
+        if not caster or not result or not getattr(result, "damage_dealt", 0):
+            return
+        target = getattr(result, "target", None)
+        self._write({
+            "type":         "save_damage",
+            "round":        self._round,
+            **self._creature_fields(caster),
+            "target":       target.name if target else None,
+            "damage":       result.damage_dealt,
+            "damage_type":  result.damage_type,
+            "save_ability": result.ability,
+            "save_success": result.success,
         })
 
     def _on_move(self, data: dict) -> None:

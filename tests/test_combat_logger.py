@@ -9,6 +9,7 @@ import io
 import contextlib
 import json
 import os
+from types import SimpleNamespace
 
 from core.events import EventBus
 from core.InitiativeManager import InitiativeManager
@@ -97,3 +98,51 @@ class TestAttackRecordShape:
             assert "trigger" in a
             assert "tags" in a and isinstance(a["tags"], list)
             assert "round" in a and "creature" in a and "team" in a
+
+
+class TestSaveBasedSpellDamage:
+    """Save-based spells (Fireball, Thunderwave, PoisonSpray, ...) deal
+    damage via SavingThrow.roll(), never through the attack-roll pipeline
+    the "attack" record type covers -- without this hook, a caster's
+    nova damage would silently be invisible to any stats built from the
+    log (e.g. damage-by-round)."""
+
+    def test_logs_save_damage_on_saving_throw_resolved(self):
+        event = EventBus()
+        initiative = SimpleNamespace(round=3)
+        logger = CombatLogger(event, initiative, output_path=None)
+
+        caster = SimpleNamespace(name="Lyra", team="blue")
+        target = SimpleNamespace(name="Goblin#1")
+        result = SimpleNamespace(
+            damage_dealt=14, damage_type="fire", ability="Dex", success=False,
+            target=target,
+        )
+        event.broadcast("saving_throw_resolved", {"caster": caster, "result": result})
+
+        save_records = [r for r in logger.records if r["type"] == "save_damage"]
+        assert len(save_records) == 1
+        rec = save_records[0]
+        assert rec["creature"] == "Lyra"
+        assert rec["team"] == "blue"
+        assert rec["target"] == "Goblin#1"
+        assert rec["damage"] == 14
+        assert rec["damage_type"] == "fire"
+        assert rec["save_ability"] == "Dex"
+        assert rec["save_success"] is False
+        assert rec["round"] == 3
+
+    def test_ignores_saves_with_no_damage(self):
+        """A successful save with on_save=NONE (or a control-only spell like
+        Hold Person) has damage_dealt=0 -- shouldn't pollute the log."""
+        event = EventBus()
+        initiative = SimpleNamespace(round=1)
+        logger = CombatLogger(event, initiative, output_path=None)
+
+        caster = SimpleNamespace(name="Lyra", team="blue")
+        result = SimpleNamespace(
+            damage_dealt=0, damage_type="", ability="Wis", success=True, target=None,
+        )
+        event.broadcast("saving_throw_resolved", {"caster": caster, "result": result})
+
+        assert [r for r in logger.records if r["type"] == "save_damage"] == []
