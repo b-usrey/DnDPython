@@ -231,6 +231,12 @@ class Ki(Feature):
         if not self.owner.actions.use_bonus_action():
             return
         self.ki_remaining -= 1
+        self.owner.event_manager.broadcast("resource_spent", {
+            "creature":  self.owner,
+            "resource":  "ki",
+            "remaining": self.ki_remaining,
+            "detail":    "Flurry of Blows",
+        })
         self.owner.actions.grant_temp_extra_attack()
         self.owner.actions.grant_temp_extra_attack()
         print(f"  {self.owner.name}: Flurry of Blows! "
@@ -318,6 +324,12 @@ class StunningStrike(Feature):
         if not target:
             return
         ki.ki_remaining -= 1
+        self.owner.event_manager.broadcast("resource_spent", {
+            "creature":  self.owner,
+            "resource":  "ki",
+            "remaining": ki.ki_remaining,
+            "detail":    "Stunning Strike",
+        })
         result = SavingThrow.roll(
             caster=self.owner, target=target,
             ability="Con", dc=_ki_save_dc(self.owner),

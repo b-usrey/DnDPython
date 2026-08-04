@@ -29,6 +29,10 @@ Schema — one record per line
                  spells (Fireball, Thunderwave, PoisonSpray, etc.), which
                  don't go through the attack-roll pipeline above at all
     bonus_action round, creature, team, ability, target (non-attack BAs)
+    resource_spent round, creature, team, resource, remaining, detail --
+                 a limited resource (ki, rage, spell_slot_<N>, ...) was
+                 spent; "detail" is an optional human-readable note (e.g.
+                 which ability spent it)
     downed       round, creature, team
     combat_end   round, winner_team, survivors
 """
@@ -55,6 +59,7 @@ class CombatLogger:
         event_bus.subscribe("saving_throw_resolved", self._on_saving_throw_resolved)
         event_bus.subscribe("move",                 self._on_move)
         event_bus.subscribe("bonus_action",         self._on_bonus_action)
+        event_bus.subscribe("resource_spent",       self._on_resource_spent)
         event_bus.subscribe("creature_downed",      self._on_downed)
         event_bus.subscribe("CombatEnded",          self._on_combat_ended)
 
@@ -181,6 +186,19 @@ class CombatLogger:
             "ability": data.get("ability", "unknown"),
             "target":  data.get("target_name"),
             "detail":  data.get("detail"),
+        })
+
+    def _on_resource_spent(self, data: dict) -> None:
+        creature = data.get("creature")
+        if not creature:
+            return
+        self._write({
+            "type":      "resource_spent",
+            "round":     self._round,
+            **self._creature_fields(creature),
+            "resource":  data.get("resource", "unknown"),
+            "remaining": data.get("remaining"),
+            "detail":    data.get("detail"),
         })
 
     def _on_downed(self, data: dict) -> None:

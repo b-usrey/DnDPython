@@ -146,3 +146,34 @@ class TestSaveBasedSpellDamage:
         event.broadcast("saving_throw_resolved", {"caster": caster, "result": result})
 
         assert [r for r in logger.records if r["type"] == "save_damage"] == []
+
+
+class TestResourceSpentLogging:
+    def test_logs_resource_spent_event(self):
+        event = EventBus()
+        initiative = SimpleNamespace(round=4)
+        logger = CombatLogger(event, initiative, output_path=None)
+
+        creature = SimpleNamespace(name="Wukong", team="blue")
+        event.broadcast("resource_spent", {
+            "creature": creature, "resource": "ki", "remaining": 1, "detail": "Flurry of Blows",
+        })
+
+        records = [r for r in logger.records if r["type"] == "resource_spent"]
+        assert len(records) == 1
+        rec = records[0]
+        assert rec["creature"] == "Wukong"
+        assert rec["team"] == "blue"
+        assert rec["resource"] == "ki"
+        assert rec["remaining"] == 1
+        assert rec["detail"] == "Flurry of Blows"
+        assert rec["round"] == 4
+
+    def test_ignores_events_with_no_creature(self):
+        event = EventBus()
+        initiative = SimpleNamespace(round=1)
+        logger = CombatLogger(event, initiative, output_path=None)
+
+        event.broadcast("resource_spent", {"resource": "ki", "remaining": 1})
+
+        assert [r for r in logger.records if r["type"] == "resource_spent"] == []

@@ -84,6 +84,11 @@ class Rage(Feature):
         self._raging = True
         if self._uses_remaining < 999:
             self._uses_remaining -= 1
+        self.owner.event_manager.broadcast("resource_spent", {
+            "creature":  self.owner,
+            "resource":  "rage",
+            "remaining": self._uses_remaining,
+        })
         self.owner.resistances.update({"bludgeoning", "piercing", "slashing"})
         print(f"  {self.owner.name} enters RAGE! "
               f"(+{self._damage_bonus} melee, B/P/S resistance, "

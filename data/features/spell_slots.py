@@ -110,6 +110,12 @@ class Spellcasting(Feature):
         for lvl in sorted(self._slots):
             if lvl >= min_level and self._slots[lvl] > 0:
                 self._slots[lvl] -= 1
+                if self.owner is not None:
+                    self.owner.event_manager.broadcast("resource_spent", {
+                        "creature":  self.owner,
+                        "resource":  f"spell_slot_{lvl}",
+                        "remaining": self._slots[lvl],
+                    })
                 return lvl
         return None
 

@@ -12,6 +12,7 @@ from types import SimpleNamespace
 import pytest
 
 from core.actionTracker import ActionTracker
+from core.events import EventBus
 from core.item import Item
 from core.saving_throw import SaveResult
 from data.features.monk_features import (
@@ -47,6 +48,7 @@ class FakeCreature:
         self.features = []
         self.conditions = set()
         self.speed = speed
+        self.event_manager = EventBus()
 
     def heal(self, amount):
         healed = min(amount, self.max_hp - self.hp)
@@ -227,6 +229,18 @@ class TestKi:
         assert owner.actions.remaining_extra_attacks == 2
         assert owner.actions.bonus_actions == 0
 
+    def test_flurry_broadcasts_resource_spent(self):
+        owner = FakeCreature(monk_level=3)
+        spent = []
+        owner.event_manager.subscribe("resource_spent", lambda data: spent.append(data))
+        ki = Ki()
+        ki.attach(owner, FakeBus())
+        ki.on_turn_started({"creature": owner})
+        assert len(spent) == 1
+        assert spent[0]["resource"] == "ki"
+        assert spent[0]["remaining"] == 2
+        assert spent[0]["detail"] == "Flurry of Blows"
+
     def test_flurry_skipped_when_no_ki_remaining(self):
         owner = FakeCreature(monk_level=1)
         ki = Ki()
@@ -324,6 +338,29 @@ class TestStunningStrike:
 
         assert ki.ki_remaining == 4
         assert feat._stunned_target is target
+
+    def test_broadcasts_resource_spent_on_attempt(self, monkeypatch):
+        monkeypatch.setattr(
+            "data.features.monk_features.SavingThrow.roll",
+            lambda **kwargs: _saveresult(False),
+        )
+        owner = FakeCreature(monk_level=5, wis_mod=2, proficiency=3)
+        spent = []
+        owner.event_manager.subscribe("resource_spent", lambda data: spent.append(data))
+        ki = Ki()
+        ki.attach(owner, FakeBus())
+        owner.features.append(ki)
+        target = FakeCreature(name="Target")
+
+        feat = StunningStrike()
+        feat.attach(owner, FakeBus())
+        attack = SimpleNamespace(item=Item("Unarmed Strike", "weapon", properties=["monk"]))
+        feat.on_hit({"attacker": owner, "target": target, "attack": attack})
+
+        assert len(spent) == 1
+        assert spent[0]["resource"] == "ki"
+        assert spent[0]["remaining"] == 4
+        assert spent[0]["detail"] == "Stunning Strike"
 
     def test_no_stun_on_successful_save(self, monkeypatch):
         monkeypatch.setattr(
