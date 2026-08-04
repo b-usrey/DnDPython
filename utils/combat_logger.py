@@ -11,6 +11,11 @@ Usage
     cm.run()
     logger.close()
 
+Every record is also kept in-memory on `logger.records` regardless of
+whether a file path was given -- pass `output_path=None` for a pure
+in-memory logger (e.g. a web request analyzing N episodes where writing
+one file per episode would be wasteful).
+
 Schema — one record per line
 -----------------------------
     turn_start   round, creature, team, hp, max_hp, conditions
@@ -33,10 +38,11 @@ if TYPE_CHECKING:
 
 
 class CombatLogger:
-    def __init__(self, event_bus: "EventBus", initiative, output_path: str):
+    def __init__(self, event_bus: "EventBus", initiative, output_path: str | None = None):
         self._initiative  = initiative
         self._path        = output_path
-        self._file        = open(output_path, "w", encoding="utf-8")
+        self._file        = open(output_path, "w", encoding="utf-8") if output_path else None
+        self.records: list[dict] = []
         self._pending_oa  = False   # flag: next attack_resolved is an OA
 
         event_bus.subscribe("TurnStarted",        self._on_turn_started)
@@ -56,8 +62,10 @@ class CombatLogger:
         return getattr(self._initiative, "round", 1)
 
     def _write(self, data: dict) -> None:
-        self._file.write(json.dumps(data) + "\n")
-        self._file.flush()
+        self.records.append(data)
+        if self._file:
+            self._file.write(json.dumps(data) + "\n")
+            self._file.flush()
 
     def _creature_fields(self, creature) -> dict:
         return {"creature": creature.name, "team": creature.team}
@@ -177,4 +185,5 @@ class CombatLogger:
     # ------------------------------------------------------------------
 
     def close(self) -> None:
-        self._file.close()
+        if self._file:
+            self._file.close()
