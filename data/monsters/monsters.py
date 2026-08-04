@@ -536,6 +536,34 @@ HILL_GIANT = {
     ],
 }
 
+# ---------------------------------------------------------------------------
+# Training dummies -- not real SRD monsters. Stationary, no attacks (so
+# plan_turn always skips their turn -- see tactical_ai.py's early "no
+# weapons available" check), very high HP so they survive a full test
+# window regardless of a character's damage output. Exist purely so a
+# single character can be simulated against a fixed defense (AC) with no
+# party-composition or counter-damage noise -- see TheDM's dummy-tester
+# page, which is the actual consumer of these.
+# ---------------------------------------------------------------------------
+_DUMMY_STATS = {"Str": 10, "Dex": 10, "Con": 10, "Int": 10, "Wis": 10, "Cha": 10}
+
+TRAINING_DUMMY_AC12 = {
+    "name": "Training Dummy (AC 12)", "hp": 500, "ac": 12, "cr": 0,
+    "multiattack": 1, "proficiency": 2, "stats": _DUMMY_STATS, "attacks": [],
+}
+TRAINING_DUMMY_AC15 = {
+    "name": "Training Dummy (AC 15)", "hp": 500, "ac": 15, "cr": 0,
+    "multiattack": 1, "proficiency": 2, "stats": _DUMMY_STATS, "attacks": [],
+}
+TRAINING_DUMMY_AC18 = {
+    "name": "Training Dummy (AC 18)", "hp": 500, "ac": 18, "cr": 0,
+    "multiattack": 1, "proficiency": 2, "stats": _DUMMY_STATS, "attacks": [],
+}
+TRAINING_DUMMY_AC21 = {
+    "name": "Training Dummy (AC 21)", "hp": 500, "ac": 21, "cr": 0,
+    "multiattack": 1, "proficiency": 2, "stats": _DUMMY_STATS, "attacks": [],
+}
+
 MONSTER_REGISTRY = {
     "GOBLIN": GOBLIN,
     "ORC": ORC,
@@ -557,4 +585,8 @@ MONSTER_REGISTRY = {
     "GHOUL": GHOUL,
     "WIGHT": WIGHT,
     "YOUNG_GREEN_DRAGON": YOUNG_GREEN_DRAGON,
+    "TRAINING_DUMMY_AC12": TRAINING_DUMMY_AC12,
+    "TRAINING_DUMMY_AC15": TRAINING_DUMMY_AC15,
+    "TRAINING_DUMMY_AC18": TRAINING_DUMMY_AC18,
+    "TRAINING_DUMMY_AC21": TRAINING_DUMMY_AC21,
 }
