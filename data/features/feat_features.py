@@ -20,6 +20,8 @@ Implemented:
   Crossbow Expert     — no melee disadvantage with ranged weapons;
                         bonus hand-crossbow attack after Attack action
   Dual Wielder        — already in fighter_features.py (registered there)
+  Piercer             — once per turn, reroll the lowest piercing damage die;
+                        +1 extra piercing die on a critical hit
 """
 import random
 from data.features.base import Feature
@@ -625,3 +627,67 @@ class ShieldMaster(Feature):
             return
         self.owner.actions.grant_temp_extra_attack()
         print(f"  {self.owner.name}: Shield Master — bonus-action shove ready!")
+
+
+# =============================================================================
+# Piercer
+# =============================================================================
+
+class Piercer(Feature):
+    """
+    Feat (2014 PHB). When you hit with a piercing weapon attack, once per
+    turn you can reroll one of the attack's damage dice and must use the new
+    roll. On a critical hit with a piercing weapon, roll one additional
+    damage die when determining the extra damage.
+
+    The reroll targets the LOWEST rolled die rather than a random one: RAW
+    forces you to keep whatever the new roll is, but a forced reroll of a
+    fresh die still has higher expected value than keeping a die that came
+    up low, so an optimizing attacker always rerolls the worst one. Rerolling
+    a die chosen up front (before seeing results) would have zero effect on
+    the expected total, which is why this is implemented by pre-rolling all
+    the dice, swapping out the minimum, and writing the total into
+    damage_mod -- the same "roll it ourselves, then zero base_dice" pattern
+    Savage Attacker uses, needed because at the "hit" phase (Phase 2) the
+    weapon's damage dice haven't actually been rolled yet.
+    """
+    name = "Piercer"
+    EVENT_MAP = {
+        "TurnStarted": "on_turn_started",
+        "hit":         "on_hit",
+    }
+
+    def __init__(self):
+        super().__init__()
+        self._used = False
+
+    def on_turn_started(self, ctx):
+        if ctx.get("creature") is self.owner:
+            self._used = False
+
+    def on_hit(self, data):
+        attacker = data.get("attacker")
+        attack   = data.get("attack")
+        if attacker is not self.owner:
+            return
+        if not isinstance(attack, WeaponAttack) or attack.damage_type != "piercing":
+            return
+
+        if attack.critical:
+            _, sides = attack.base_dice
+            attack.extra_dice.append((1, sides))
+            attack.tags.add("piercer")
+
+        if self._used:
+            return
+        num, sides = attack.base_dice
+        if num < 1:
+            return
+        rolls = [random.randint(1, sides) for _ in range(num)]
+        worst = rolls.index(min(rolls))
+        rolls[worst] = random.randint(1, sides)
+        attack.damage_mod += sum(rolls)
+        attack.base_dice   = (0, sides)   # already rolled above; prevent roll_damage rolling again
+        self._used = True
+        attack.tags.add("piercer")
+        print(f"  {self.owner.name}: Piercer — rerolled lowest die, now {rolls}!")

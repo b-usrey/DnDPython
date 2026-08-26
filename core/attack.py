@@ -32,6 +32,7 @@ class Attack(ABC):
         self.range      = range
         self.tags       = set()
         self.item       = item if (item and item.item_type == "weapon") else None
+        self.damage_type    = "bludgeoning"   # default; overridden from item below
         if item and item.item_type == "weapon":
             self.base_dice   = (int(item.damage_die.split("d")[0]), int(item.damage_die.split("d")[1]))
             self.to_hit_mod  = attacker.statblock.mods[item.ability] + item.attack_bonus + attacker.proficiency
@@ -39,7 +40,6 @@ class Attack(ABC):
             self.damage_type = getattr(item, "damageType", "bludgeoning")
             if item.attack_type == "range":
                 self.range = True
-        self.damage_type    = "bludgeoning"   # default; overridden from item below
         self.extra_dice     = []
         self.advantage      = False
         self.disadvantage   = False
