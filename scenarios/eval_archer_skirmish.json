@@ -21,7 +21,7 @@
     }
   ],
   "monsters": [
-    { "type": "WIGHT", "count": 3, "weapon_role": "melee" },
-    { "type": "HOBGOBLIN", "count": 5, "weapon_role": "range" }
+    { "type": "WIGHT", "count": 3, "weapon_role": "all" },
+    { "type": "HOBGOBLIN", "count": 5, "weapon_role": "all" }
   ]
 }

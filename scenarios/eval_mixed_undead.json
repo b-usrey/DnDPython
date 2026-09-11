@@ -21,8 +21,8 @@
     }
   ],
   "monsters": [
-    { "type": "GHAST", "count": 2, "weapon_role": "melee" },
-    { "type": "WIGHT", "count": 2, "weapon_role": "melee" },
-    { "type": "BUGBEAR", "count": 1, "weapon_role": "melee" }
+    { "type": "GHAST", "count": 2, "weapon_role": "all" },
+    { "type": "WIGHT", "count": 2, "weapon_role": "all" },
+    { "type": "BUGBEAR", "count": 1, "weapon_role": "all" }
   ]
 }

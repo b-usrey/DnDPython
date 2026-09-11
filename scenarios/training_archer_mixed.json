@@ -21,7 +21,7 @@
     }
   ],
   "monsters": [
-    { "type": "GHAST", "count": 4, "weapon_role": "melee" },
-    { "type": "HOBGOBLIN", "count": 4, "weapon_role": "range" }
+    { "type": "GHAST", "count": 4, "weapon_role": "all" },
+    { "type": "HOBGOBLIN", "count": 4, "weapon_role": "all" }
   ]
 }

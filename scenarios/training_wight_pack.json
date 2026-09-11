@@ -21,6 +21,6 @@
     }
   ],
   "monsters": [
-    { "type": "WIGHT", "count": 4, "weapon_role": "melee" }
+    { "type": "WIGHT", "count": 4, "weapon_role": "all" }
   ]
 }

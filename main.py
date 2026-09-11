@@ -19,7 +19,7 @@ for _module_info in pkgutil.iter_modules(data.features.__path__):
         importlib.import_module(f"data.features.{_module_info.name}")
 from data.monsters.monsters import *
 from utils.creatureFactory import CreatureFactory
-from utils.scenarioLoader import ScenarioLoader
+from utils.scenarioLoader import ScenarioLoader, apply_weapon_roles
 from utils.battle_visualiser import BattleVisualiser
 
 
@@ -134,47 +134,12 @@ def main(args):
     loader              = ScenarioLoader(factory, event)
     players, monsters   = loader.load(scenario_data)
 
-    # Attach monster attack templates so TacticalAI can see them.
-    # weapon_role controls which weapons each monster gets:
-    #   "all"    -> every weapon in the template (original behaviour)
-    #   "melee"  -> melee attacks only
-    #   "ranged" -> ranged attacks only
-    #   "random" -> one weapon type chosen randomly per monster (default)
-    import random as _random
-    monster_templates = scenario_data.get("monsters", [])
-    monster_idx = 0
-    for tmpl in monster_templates:
-        mtype = tmpl.get("type", "").upper()
-        count = tmpl.get("count", 1)
-        role  = tmpl.get("weapon_role", "random")
-
-        if mtype not in MONSTER_REGISTRY:
-            monster_idx += count
-            continue
-
-        all_attacks    = MONSTER_REGISTRY[mtype].get("attacks", [])
-        melee_attacks  = [a for a in all_attacks if a.get("attack_type", "melee") == "melee"]
-        ranged_attacks = [a for a in all_attacks if a.get("attack_type", "melee") != "melee"]
-
-        for _ in range(count):
-            if monster_idx >= len(monsters):
-                break
-            monster = monsters[monster_idx]
-
-            if role == "all":
-                monster._attack_templates = all_attacks
-            elif role == "melee":
-                monster._attack_templates = melee_attacks or all_attacks
-            elif role == "ranged":
-                monster._attack_templates = ranged_attacks or all_attacks
-            else:  # "random"
-                if melee_attacks and ranged_attacks:
-                    pool = _random.choice([melee_attacks, ranged_attacks])
-                else:
-                    pool = all_attacks
-                monster._attack_templates = pool
-                role_label = "melee" if pool is melee_attacks else "ranged"
-                print(f"  {monster.name} assigned as {role_label} fighter")
+    # Attach monster attack templates so TacticalAI can see them -- what
+    # each weapon_role means lives in utils.scenarioLoader.apply_weapon_roles,
+    # shared with CombatEnv and the TheDM API so all three agree.
+    for monster, label in apply_weapon_roles(scenario_data, monsters):
+        if label != "all":
+            print(f"  {monster.name} assigned as {label} fighter")
 
             monster_idx += 1
 

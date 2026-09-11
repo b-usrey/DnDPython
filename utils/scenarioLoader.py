@@ -95,6 +95,84 @@ def _find_placement_squares(battle_map, start_col, col_range, count):
     )
 
 
+# ---------------------------------------------------------------------------
+# Weapon roles
+# ---------------------------------------------------------------------------
+
+VALID_WEAPON_ROLES = ("random", "melee", "ranged", "all")
+_WEAPON_ROLE_ALIASES = {"range": "ranged", "mixed": "random"}
+
+
+def normalize_weapon_role(role) -> str:
+    """
+    Canonical weapon_role token. Accepts the legacy spellings the web
+    builder used to emit ("range", "mixed") so old scenario files keep
+    meaning what their author intended; anything unrecognised is "random".
+    """
+    token = str(role or "random").strip().lower()
+    token = _WEAPON_ROLE_ALIASES.get(token, token)
+    return token if token in VALID_WEAPON_ROLES else "random"
+
+
+def apply_weapon_roles(scenario_data, monsters, rng=None):
+    """
+    Attach each monster's attack templates according to its group's
+    weapon_role -- the one place this rule lives. main.py, CombatEnv and
+    the TheDM API each used to carry their own copy (and CombatEnv had
+    none at all, silently handing every monster every weapon), so the
+    same scenario JSON was a different fight depending on which path
+    ran it.
+
+      "all"    -> every weapon in the template
+      "melee"  -> melee attacks only (falls back to all if it has none)
+      "ranged" -> ranged attacks only (falls back to all if it has none)
+      "random" -> per monster, a melee-or-ranged coin flip when it has
+                  both kinds; all of them when it only has one (default)
+
+    Groups are matched to `monsters` by order, same as place_creatures.
+    Returns [(monster, "melee"|"ranged"|"all"), ...] for callers that
+    want to report the assignment.
+    """
+    import random as _random
+    rng = rng or _random
+    assigned = []
+    monster_idx = 0
+    for tmpl in scenario_data.get("monsters", []):
+        mtype = str(tmpl.get("type", "")).upper()
+        count = int(tmpl.get("count", 1))
+        role  = normalize_weapon_role(tmpl.get("weapon_role"))
+
+        entry = MONSTER_REGISTRY.get(mtype)
+        if entry is None:
+            monster_idx += count
+            continue
+
+        all_attacks    = entry.get("attacks", [])
+        melee_attacks  = [a for a in all_attacks if a.get("attack_type", "melee") == "melee"]
+        ranged_attacks = [a for a in all_attacks if a.get("attack_type", "melee") != "melee"]
+
+        for _ in range(count):
+            if monster_idx >= len(monsters):
+                break
+            monster = monsters[monster_idx]
+            if role == "all":
+                pool = all_attacks
+            elif role == "melee":
+                pool = melee_attacks or all_attacks
+            elif role == "ranged":
+                pool = ranged_attacks or all_attacks
+            elif melee_attacks and ranged_attacks:
+                pool = rng.choice([melee_attacks, ranged_attacks])
+            else:
+                pool = all_attacks
+            monster._attack_templates = pool
+            label = ("melee"  if pool is melee_attacks  else
+                     "ranged" if pool is ranged_attacks else "all")
+            assigned.append((monster, label))
+            monster_idx += 1
+    return assigned
+
+
 def place_creatures(scenario_data, players, monsters, battle_map):
     """Place creatures on the map from the scenario's 'positions' block."""
     positions     = scenario_data.get("positions", {})

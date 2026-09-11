@@ -167,6 +167,7 @@ class CombatEnv:
         from utils.scenarioLoader import ScenarioLoader, build_map, place_creatures
         from core.team_memory import TeamMemory
         from data.monsters.monsters import MONSTER_REGISTRY
+        from utils.scenarioLoader import apply_weapon_roles
 
         event   = EventBus()
         factory = CreatureFactory()
@@ -177,16 +178,11 @@ class CombatEnv:
 
         with ctx:
             players, monsters = loader.load(self.scenario_data)
-            monster_idx = 0
-            for tmpl in self.scenario_data.get("monsters", []):
-                mtype   = tmpl.get("type", "").upper()
-                count   = tmpl.get("count", 1)
-                attacks = MONSTER_REGISTRY.get(mtype, {}).get("attacks", [])
-                for _ in range(count):
-                    if monster_idx >= len(monsters):
-                        break
-                    monsters[monster_idx]._attack_templates = attacks
-                    monster_idx += 1
+            # Honour each group's weapon_role, same as main.py and the
+            # TheDM API. This used to hand every monster every weapon
+            # regardless of role, so training fought a different scenario
+            # than the webapp did for the same JSON.
+            apply_weapon_roles(self.scenario_data, monsters)
 
             battle_map = build_map(self.scenario_data)
             place_creatures(self.scenario_data, players, monsters, battle_map)
