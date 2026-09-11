@@ -19,11 +19,18 @@ setlocal EnableDelayedExpansion
 :: the trained team wins 40-60%% against the no-selector baseline with fights
 :: lasting 10-13 rounds. Eval scenarios are held out of training, so results
 :: measure generalisation rather than fit.
-set RUN_NAME=overnight_run_20260910
+set RUN_NAME=overnight_run_20260911
 set TRAIN_SCENARIOS=training_ghast_pack.json training_wight_pack.json training_archer_mixed.json
 set EVAL_SCENARIOS=eval_mixed_undead.json eval_archer_skirmish.json
 set PYTHON=python
 set WORKERS=4
+
+:: Which methods to train+eval this run. RL and Evo together cost ~2.6h of
+:: an 8h night; with DQN as the focus they are off so it gets the whole
+:: budget. Flip to 1 to include them.
+set TRAIN_RL=0
+set TRAIN_EVO=0
+set TRAIN_DQN=1
 
 set RL_EPISODES=80000
 set RL_BINS=3
@@ -41,18 +48,25 @@ set EVO_ELITE_FRAC=0.2
 set EVO_MUTATION_SCALE=0.1
 set EVO_CROSSOVER_RATE=0.5
 
-:: DQN — slow epsilon decay keeps exploration active through ~75%% of training
-set DQN_EPISODES=20000
+:: DQN -- sized to an ~8h overnight budget at the measured ~0.7-0.9 s/episode.
+:: Warm start clones the heuristic teacher first, so eps starts at 0.4 rather
+:: than 1.0 (exploring at 1.0 would throw the prior away). 0.99991 decays
+:: 0.4 -> 0.05 over ~22.5k episodes, i.e. ~75%% of the run, same shape as before.
+:: SAVE_EVERY writes the checkpoint + log every N episodes so a crash at
+:: hour 7 keeps hour 7's weights instead of nothing.
+set DQN_EPISODES=30000
 set DQN_HIDDEN=128 64
 set DQN_LR=0.0005
 set DQN_GAMMA=0.95
-set DQN_EPS=1.0
+set DQN_EPS=0.4
 set DQN_EPS_MIN=0.05
-set DQN_EPS_DECAY=0.99985
+set DQN_EPS_DECAY=0.99991
 set DQN_BUF=50000
 set DQN_BATCH=128
 set DQN_TARGET_FREQ=200
 set DQN_PRINT_EVERY=500
+set DQN_WARM_START=300
+set DQN_SAVE_EVERY=500
 
 set EVAL_EPISODES=1000
 :: ── END CONFIG ──────────────────────────────────────────────
@@ -78,6 +92,7 @@ call :log ""
 
 
 :: ── 1. RL TRAINING ───────────────────────────────────────────
+if not "%TRAIN_RL%"=="1" goto :skip_rl
 call :log "  [1/6] RL training  (%RL_EPISODES% episodes)"
 
 %PYTHON% main.py train ^
@@ -108,6 +123,8 @@ call :log ""
 
 
 :: ── 2. EVO TRAINING ──────────────────────────────────────────
+:skip_rl
+if not "%TRAIN_EVO%"=="1" goto :skip_evo
 call :log "  [2/6] Evo training  (%EVO_GENERATIONS% generations)"
 
 %PYTHON% main.py train ^
@@ -135,6 +152,8 @@ call :log ""
 
 
 :: ── 3. RL EVAL ───────────────────────────────────────────────
+:skip_evo
+if not "%TRAIN_RL%"=="1" goto :skip_rl_eval
 call :log "  [3/6] RL eval  (%EVAL_EPISODES% episodes per scenario)"
 
 for %%S in (%EVAL_SCENARIOS%) do (
@@ -160,6 +179,8 @@ call :log ""
 
 
 :: ── 4. EVO EVAL ──────────────────────────────────────────────
+:skip_rl_eval
+if not "%TRAIN_EVO%"=="1" goto :skip_evo_eval
 call :log "  [4/6] Evo eval  (%EVAL_EPISODES% episodes per scenario)"
 
 for %%S in (%EVAL_SCENARIOS%) do (
@@ -185,6 +206,8 @@ call :log ""
 
 
 :: ── 5. DQN TRAINING ──────────────────────────────────────────
+:skip_evo_eval
+if not "%TRAIN_DQN%"=="1" goto :skip_dqn
 call :log "  [5/6] DQN training  (%DQN_EPISODES% episodes)"
 
 %PYTHON% main.py train ^
@@ -204,6 +227,9 @@ call :log "  [5/6] DQN training  (%DQN_EPISODES% episodes)"
     --dqn-batch        %DQN_BATCH% ^
     --dqn-target-freq  %DQN_TARGET_FREQ% ^
     --print-every      %DQN_PRINT_EVERY% ^
+    --warm-start       %DQN_WARM_START% ^
+    --save-every       %DQN_SAVE_EVERY% ^
+    --quiet ^
     --plot ^
     --smoothing        500
 
@@ -240,6 +266,7 @@ for %%S in (%EVAL_SCENARIOS%) do (
 )
 call :log ""
 
+:skip_dqn
 
 :end
 call :log "========================================================"

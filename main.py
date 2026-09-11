@@ -25,6 +25,15 @@ from utils.battle_visualiser import BattleVisualiser
 
 logging.basicConfig(level=logging.INFO, format = "%(message)s")
 
+# The training progress bar uses █/░. Windows Python picks cp1252 for a
+# redirected stdout (`> run.log`, Task Scheduler, ssh) and dies on the very
+# first print with UnicodeEncodeError -- fatal for an unattended overnight
+# run. Force UTF-8 regardless of where stdout is pointed.
+import sys as _sys
+for _stream in (_sys.stdout, _sys.stderr):
+    if hasattr(_stream, "reconfigure"):
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+
 
 def load_json(filename):
     path = os.path.join("scenarios", filename)
@@ -268,6 +277,11 @@ def run_training(args):
     from core.selectors.dqn_selector import DQNStrategySelector
     from core.trainer import StrategyTrainer
 
+    if getattr(args, "quiet", False):
+        # CombatEnv(silent=True) only redirects stdout; the tactical layer
+        # logs to stderr via logging, which is a separate stream.
+        logging.disable(logging.INFO)
+
     # Load one or more training scenarios.  Multiple --json files are mixed
     # each episode so the policy generalises across encounters.
     scenario_list = [load_json(j) for j in args.json]
@@ -344,15 +358,38 @@ def run_training(args):
         if args.load:
             sel.load(args.load)
 
-        trainer = StrategyTrainer(env, sel)
+        trainer      = StrategyTrainer(env, sel)
+        weights_path = os.path.join(args.save_dir, f"{run_name}_dqn.pt")
+        log_csv      = os.path.join(args.save_dir, f"{run_name}_log.csv")
+        log_json     = os.path.join(args.save_dir, f"{run_name}_log.json")
+
+        if args.warm_start > 0:
+            # Behaviour-clone the hand-written heuristic before any RL, so
+            # the network starts near sensible play instead of random
+            # weights. On the current training scenarios a fully random
+            # policy wins 7-31% against a 40-54% no-selector bar; this
+            # closes most of that gap before episode 1. Pair it with a
+            # lower --eps (0.3-0.5) -- exploring at 1.0 afterwards just
+            # throws the prior away for the first few thousand episodes.
+            from core.selectors.heuristic_selector import HeuristicStrategySelector
+            print(f"  [DQN] warm start: collecting {args.warm_start} heuristic episodes…")
+            obs, acts = trainer.collect_demonstrations(HeuristicStrategySelector(), args.warm_start)
+            losses = sel.imitate(obs, acts)
+            print(f"  [DQN] warm start: {len(obs)} demonstrations, "
+                  f"imitation loss {losses[0]:.3f} → {losses[-1]:.3f}"
+                  + ("" if args.eps < 0.9 else
+                     f"   (note: --eps {args.eps} will mostly ignore this prior early on)"))
+
         trainer.train_dqn(
             n_episodes  = args.episodes,
             verbose     = True,
             print_every = args.print_every,
             log         = log,
+            save_every  = args.save_every,
+            save_path   = weights_path,
+            log_paths   = (log_csv, log_json),
         )
 
-        weights_path = os.path.join(args.save_dir, f"{run_name}_dqn.pt")
         sel.save(weights_path)
 
     # Always save the log
@@ -732,6 +769,15 @@ if __name__ == "__main__":
                        help="Minibatch size (default: 64)")
     dqn_g.add_argument("--dqn-target-freq",  type=int,   default=100,
                        help="Target network hard-update frequency in episodes (default: 100)")
+    dqn_g.add_argument("--warm-start",       type=int,   default=0, metavar="N",
+                       help="Before RL, behaviour-clone N episodes of the heuristic teacher "
+                            "(default: 0 = off). Pair with a lower --eps, e.g. 0.4.")
+    dqn_g.add_argument("--save-every",       type=int,   default=0, metavar="N",
+                       help="Checkpoint weights + log every N episodes so a crash mid-run "
+                            "keeps the latest state (default: 0 = only at the end)")
+    train_p.add_argument("--quiet",     action="store_true",
+                         help="Silence the per-turn tactical INFO logging (it bypasses the "
+                              "stdout redirect and emits ~11 KB per episode)")
 
     # ── eval: evaluate a trained selector against no-selector + random ────
     eval_p = sub.add_parser("eval", help="Evaluate a trained selector (ε=0) vs no-selector and per-turn-random baselines")

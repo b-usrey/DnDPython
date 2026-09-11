@@ -366,7 +366,10 @@ class CombatEnv:
                     return memory.get_state_vector(c, enemies, allies,
                                                    max_rounds=max_rounds)
                 break
-        return [0.0] * 12
+        # Must match TeamMemory.get_state_vector's width (15 since the three
+        # creature-identity features were added); the DQN's n_obs is 15 too,
+        # so a shorter vector here would be a shape mismatch, not a no-op.
+        return [0.0] * 15
 
 
 # ---------------------------------------------------------------------------

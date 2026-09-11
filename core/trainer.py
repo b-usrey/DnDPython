@@ -265,12 +265,44 @@ class StrategyTrainer:
 
     # -- DQN training ------------------------------------------------------
 
+    def collect_demonstrations(
+        self,
+        teacher: StrategySelector,
+        n_episodes: int,
+    ) -> tuple[list[list[float]], list]:
+        """
+        Run n_episodes with `teacher` driving the trained team and record
+        every (obs, action) it produced -- the demonstration set that
+        DQNStrategySelector.imitate() clones from. Uses the same
+        instrumented-select trick train_dqn() uses to see decisions
+        without changing them.
+        """
+        observations: list[list[float]] = []
+        actions: list = []
+
+        _orig_select = teacher.select
+        def _recording_select(obs):
+            action = _orig_select(obs)
+            observations.append(list(obs))
+            actions.append(action)
+            return action
+        teacher.select = _recording_select
+        try:
+            for _ in range(n_episodes):
+                self.env.run_episode(selector=teacher)
+        finally:
+            teacher.select = _orig_select
+        return observations, actions
+
     def train_dqn(
         self,
         n_episodes:  int  = 500,
         verbose:     bool = True,
         print_every: int  = 50,
         log: TrainingLog | None = None,
+        save_every:  int  = 0,
+        save_path:   str | None = None,
+        log_paths:   tuple[str, str] | None = None,
     ) -> list[float]:
         """
         DQN training via experience replay, with potential-based reward
@@ -285,16 +317,25 @@ class StrategyTrainer:
         interface.
 
         Pass log=TrainingLog("run_name") to record per-episode stats.
+
+        save_every / save_path / log_paths: when save_every > 0, write the
+        weights to save_path (and the log to log_paths=(csv, json)) every
+        that many episodes, so a multi-hour run that dies partway through
+        leaves the latest checkpoint and curve behind instead of nothing.
+
         Returns list of per-episode total rewards.
         """
         from core.selectors.dqn_selector import DQNStrategySelector
         assert isinstance(self.selector, DQNStrategySelector), \
             "train_dqn requires a DQNStrategySelector"
+        if save_every > 0 and not save_path:
+            raise ValueError("save_every requires save_path")
 
         if log is not None:
             log.start()
 
         episode_rewards = []
+        episode_wins    = []
         trajectory: list[tuple] = []
 
         _orig_select = self.selector.select
@@ -303,6 +344,14 @@ class StrategyTrainer:
             trajectory.append((list(obs), action))
             return action
         self.selector.select = _instrumented_select
+
+        def _checkpoint():
+            if verbose:
+                print()   # the progress bar line is still open (\r, end="")
+            self.selector.save(save_path)
+            if log is not None and log_paths:
+                log.save_csv(log_paths[0])
+                log.save_json(log_paths[1])
 
         for ep in range(n_episodes):
             trajectory.clear()
@@ -314,6 +363,7 @@ class StrategyTrainer:
 
             self.selector.decay_epsilon()
             episode_rewards.append(ep_reward)
+            episode_wins.append(int(won))
 
             if log is not None:
                 log.record(
@@ -323,12 +373,19 @@ class StrategyTrainer:
                     epsilon=round(self.selector.eps, 4),
                 )
 
+            if save_every > 0 and (ep + 1) % save_every == 0:
+                _checkpoint()
+
             if verbose:
                 pct    = (ep + 1) / n_episodes
                 filled = int(30 * pct)
                 bar    = "█" * filled + "░" * (30 - filled)
-                recent = episode_rewards[max(0, ep + 1 - print_every):]
-                wr     = sum(1 for r in recent if r > 0) / len(recent)
+                window = max(0, ep + 1 - print_every)
+                recent = episode_rewards[window:]
+                # Real win rate, not "reward > 0": kills and damage rewards
+                # can push a lost fight's shaped reward positive, which made
+                # the old bar read 50-100% while the true rate was 25%.
+                wr     = float(np.mean(episode_wins[window:]))
                 print(
                     f"\r  [DQN] [{bar}] {ep+1}/{n_episodes}  "
                     f"win={wr:.0%}  ε={self.selector.eps:.3f}",
