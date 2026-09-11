@@ -166,35 +166,71 @@ class DQNStrategySelector(StrategySelector):
 
     def learn_from_episode(self, trajectory: list, outcome: float) -> None:
         """
-        Replay one episode's (obs, action) trajectory as genuine step-wise
-        updates, with potential-based reward shaping (Ng, Harada & Russell
-        1999) toward this selector's own current state-value estimate --
-        mirrors RLStrategySelector.learn_from_episode() (see that docstring
-        for the full rationale). Each step's reward is the raw terminal
-        outcome (0 on every step except the last) plus
-        gamma*V(next_obs) - V(obs).
+        Replay one episode's trajectory as genuine step-wise updates, with
+        potential-based reward shaping (Ng, Harada & Russell 1999) toward
+        this selector's own current state-value estimate.
 
-        Unlike the tabular RL trainer this replaces, DQN's own transition
-        handling was already correct (real per-step next_obs, done only on
-        the final step) -- this only replaces the flat, constant
-        per-episode outcome reward with a denser, state-value-aware one.
+        **Transitions are grouped per acting creature.** A whole team shares
+        one selector, so the recorded trajectory is a flat interleaving of
+        every creature's turns: on a 4-PC party scenario, 98.9% of adjacent
+        entries belong to *different* creatures, and a creature's own next
+        turn is ~7 entries later. Pairing adjacent entries -- which this used
+        to do -- meant three things went wrong at once:
+
+          * the bootstrap target became Q(s_troll, a) <- r + gamma * max
+            Q(s_hobgoblin, .), i.e. the network was taught that acting as a
+            troll transitions you into being a hobgoblin;
+          * the shaping terms stopped telescoping, so they were no longer
+            policy-invariant *and* were systematically biased -- a tanky
+            creature has a higher V than a frail one, so the sign of the
+            shaped reward tracked initiative order rather than whether the
+            action was any good;
+          * the terminal outcome landed on 1 of ~111 transitions, and
+            gamma**111 is 3e-03, so it never reached the decisions that
+            caused it. Per-creature trajectories are ~16 steps, where
+            gamma**16 is 0.44.
+
+        Grouping costs nothing in generality: there is still exactly one
+        network, one replay buffer and one set of weights, shared by every
+        creature (standard parameter sharing). Each creature contributes its
+        own experience to the same learner, which is what lets one policy
+        cover a hobgoblin and a dragon -- the state vector carries *relative*
+        identity (features 12-14: ranged option, share of team HP, spell
+        resources) rather than a monster name, so what transfers is "how to
+        act given what I am", not "how to play a hobgoblin".
+
+        Every creature's own last decision is terminal and receives the
+        shared team outcome, so all of them learn from the result instead of
+        only whoever happened to act last.
 
         Args:
-            trajectory: [(obs, action), ...] in the order they were visited.
+            trajectory: entries of (actor_id, obs, action), or legacy
+                        (obs, action) which is treated as a single agent.
             outcome:    the episode's terminal reward, e.g. from
                         CombatEnv._outcome_reward().
         """
-        n = len(trajectory)
-        for i, (obs, action) in enumerate(trajectory):
-            is_last    = (i == n - 1)
-            next_obs   = trajectory[i + 1][0] if not is_last else obs
-            env_reward = outcome if is_last else 0.0
+        # Split into per-creature sub-trajectories, preserving visit order.
+        per_actor: dict = {}
+        for entry in trajectory:
+            if len(entry) == 3:
+                actor, obs, action = entry
+            else:                       # legacy 2-tuple: one agent
+                obs, action = entry
+                actor = None
+            per_actor.setdefault(actor, []).append((obs, action))
 
-            v_s  = self.state_value(obs)
-            v_s2 = 0.0 if is_last else self.state_value(next_obs)
-            shaped_reward = env_reward + self.gamma * v_s2 - v_s
+        for steps in per_actor.values():
+            n = len(steps)
+            for i, (obs, action) in enumerate(steps):
+                is_last    = (i == n - 1)
+                next_obs   = steps[i + 1][0] if not is_last else obs
+                env_reward = outcome if is_last else 0.0
 
-            self.update(obs, action, shaped_reward, next_obs, done=is_last)
+                v_s  = self.state_value(obs)
+                v_s2 = 0.0 if is_last else self.state_value(next_obs)
+                shaped_reward = env_reward + self.gamma * v_s2 - v_s
+
+                self.update(obs, action, shaped_reward, next_obs, done=is_last)
 
     # -- Learning ------------------------------------------------------------
 

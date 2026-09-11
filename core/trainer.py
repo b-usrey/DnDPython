@@ -341,7 +341,15 @@ class StrategyTrainer:
         _orig_select = self.selector.select
         def _instrumented_select(obs):
             action = _orig_select(obs)
-            trajectory.append((list(obs), action))
+            # Record who decided, not just what was decided. Every creature on
+            # the team shares this selector, so a flat trajectory interleaves
+            # them and learn_from_episode would bootstrap each creature's
+            # Q-value off the *next creature's* state. (train_rl above still
+            # records flat 2-tuples; RLStrategySelector has the same
+            # limitation, but the tabular path is off in the run scripts.)
+            actor = getattr(self.selector, "acting_creature", None)
+            trajectory.append((id(actor) if actor is not None else None,
+                               list(obs), action))
             return action
         self.selector.select = _instrumented_select
 

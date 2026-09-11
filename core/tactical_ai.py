@@ -295,6 +295,12 @@ class TacticalAI:
                 if c.team == creature.team and c is not creature and c.is_alive()
             ]
             obs      = memory.get_state_vector(creature, enemies, allies)
+            # Tag the decision with its author so training can group
+            # transitions per creature instead of per team.
+            try:
+                self.strategy_selector.acting_creature = creature
+            except AttributeError:      # exotic selector with __slots__
+                pass
             strategy = self.strategy_selector.select(obs)
             _log.debug("[%s] %s: ML strategy → %s", creature.team, creature.name, strategy)
             if trace is not None:

@@ -49,6 +49,12 @@ N_STRATEGIES = len(Strategy)
 class StrategySelector:
     def __init__(self):
         self.tactic_counts = {s: 0 for s in Strategy}
+        # Set by TacticalAI.plan_turn right before select(), so a trainer can
+        # tell *which* creature made each decision. A whole team shares one
+        # selector, so without this the recorded trajectory is a flat
+        # interleaving of every creature's turns and there is no way to pair
+        # a decision with that same creature's next state.
+        self.acting_creature = None
 
     def select(self, obs: list[float]) -> Strategy:
         raise NotImplementedError
