@@ -10,9 +10,18 @@ setlocal EnableDelayedExpansion
 :: ============================================================
 
 :: ── CONFIG ──────────────────────────────────────────────────
-set RUN_NAME=overnight_run_20260512_v2
-set TRAIN_SCENARIOS=brendiir_vs_goblins.json brendiir_vs_orcs.json training_grounds.json
-set EVAL_SCENARIOS=brendiir_vs_goblins.json brendiir_vs_orcs.json brendiir_vs_hobgoblins.json
+:: Scenario set rebalanced 2026-09-10. The previous set (brendiir_vs_*,
+:: training_grounds) sat at a 0%% win rate for the trained team under current
+:: rules -- those PCs carried illegal loadouts (3 feats on a L5 fighter, 3
+:: stacked magic items on the ranger) and fought 12-27 HP monsters that a PC
+:: with Extra Attack deletes one per round, so no policy could distinguish
+:: itself. These five use legal PCs and multiattack monsters, calibrated so
+:: the trained team wins 40-60%% against the no-selector baseline with fights
+:: lasting 10-13 rounds. Eval scenarios are held out of training, so results
+:: measure generalisation rather than fit.
+set RUN_NAME=overnight_run_20260910
+set TRAIN_SCENARIOS=training_ghast_pack.json training_wight_pack.json training_archer_mixed.json
+set EVAL_SCENARIOS=eval_mixed_undead.json eval_archer_skirmish.json
 set PYTHON=python
 set WORKERS=4
 
