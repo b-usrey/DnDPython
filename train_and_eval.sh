@@ -19,8 +19,14 @@ cd "$(dirname "$0")"
 
 # ── CONFIG ──────────────────────────────────────────────────
 RUN_NAME=${RUN_NAME:-overnight_run_$(date +%Y%m%d)}
-TRAIN_SCENARIOS=(training_ghast_pack.json training_wight_pack.json training_archer_mixed.json)
-EVAL_SCENARIOS=(eval_mixed_undead.json eval_archer_skirmish.json)
+# Party scenarios: a 4-PC party, not a lone hero. With one PC on the board
+# `ally_under_pressure` (>= 2 enemies on one ally) can never fire, so PROTECT
+# was a guaranteed no-op and FOCUS_FIRE had only one enemy to choose from --
+# 3 of the 5 actions aliased the default planner and the policy collapsed
+# onto it. All three sit at 45-50% red win under the default AI, and no
+# monster type is shared between the training set and the held-out eval.
+TRAIN_SCENARIOS=(training_party_skirmish.json training_party_ambush.json)
+EVAL_SCENARIOS=(eval_party_warband.json eval_mixed_undead.json)
 PYTHON=${PYTHON:-.venv/bin/python}
 WORKERS=4
 export MPLBACKEND=Agg   # headless box: --plot must render to file, not a window
@@ -48,23 +54,26 @@ EVO_ELITE_FRAC=0.2
 EVO_MUTATION_SCALE=0.1
 EVO_CROSSOVER_RATE=0.5
 
-# DQN -- sized to an ~8h overnight budget at the measured ~0.7-0.9 s/episode.
+# DQN -- sized to an ~8h overnight budget. The party scenarios run ~1.1-1.2
+# s/episode (17 creatures, ~20 rounds) against ~0.33 s for the old solo
+# fights, so the episode count comes down even though each episode now
+# carries far more decision points.
 # Warm start clones the heuristic teacher first, so eps starts at 0.4 rather
-# than 1.0 (exploring at 1.0 would throw the prior away). 0.99991 decays
-# 0.4 -> 0.05 over ~22.5k episodes, i.e. ~75% of the run.
+# than 1.0 (exploring at 1.0 would throw the prior away). 0.99989 decays
+# 0.4 -> 0.05 over ~18.75k episodes, i.e. ~75% of the run.
 # SAVE_EVERY writes the checkpoint + log every N episodes so a crash at
 # hour 7 keeps hour 7's weights instead of nothing.
 # Every DQN knob is env-overridable (DQN_EPISODES=50000 bash train_and_eval.sh)
 # so a faster or slower box can fill its budget without editing the file.
 # If you change DQN_EPISODES, retune DQN_EPS_DECAY so eps still reaches the
 # floor ~75% of the way through: decay = exp(ln(EPS_MIN/EPS) / (0.75*EPISODES)).
-DQN_EPISODES=${DQN_EPISODES:-30000}
+DQN_EPISODES=${DQN_EPISODES:-25000}
 DQN_HIDDEN=${DQN_HIDDEN:-"128 64"}
 DQN_LR=${DQN_LR:-0.0005}
 DQN_GAMMA=${DQN_GAMMA:-0.95}
 DQN_EPS=${DQN_EPS:-0.4}
 DQN_EPS_MIN=${DQN_EPS_MIN:-0.05}
-DQN_EPS_DECAY=${DQN_EPS_DECAY:-0.99991}
+DQN_EPS_DECAY=${DQN_EPS_DECAY:-0.99989}
 DQN_BUF=${DQN_BUF:-50000}
 DQN_BATCH=${DQN_BATCH:-128}
 DQN_TARGET_FREQ=${DQN_TARGET_FREQ:-200}
@@ -92,6 +101,7 @@ run_eval() {   # run_eval <method> <weights> <out_dir>
     local method=$1 weights=$2 out_dir=$3
     for s in "${EVAL_SCENARIOS[@]}"; do
         local sname=${s%.json}
+        sname=${sname#eval_}     # files are already eval_*; do not emit eval_eval_*
         log "    $s"
         if $PYTHON main.py eval \
                 --json    "$s" \

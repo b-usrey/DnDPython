@@ -130,6 +130,12 @@ class CombatManager:
             self._run_turn(creature)
 
         self.initiative.round += 1
+        # Keep TeamMemory (and anything else listening) in step with the
+        # round counter. We advance the round here rather than through
+        # InitiativeManager.end_turn(), so nothing else broadcasts this --
+        # without it TeamMemory.round stays 1 forever and the `round_frac`
+        # ML feature is a constant.
+        self.event.broadcast("RoundStarted", {"round": self.initiative.round})
 
     def _run_turn(self, creature) -> None:
         """Execute one creature's full turn."""

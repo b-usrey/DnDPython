@@ -524,8 +524,14 @@ class TeamMemory:
             return len(status.targeted_by) if status else 0
         return max(allies, key=pressure)
 
-    _MELEE_RANGE = 1.5   # squares -- covers orthogonal (1.0) and diagonal (1.41)
-    _DIST_CAP    = 10.0  # squares beyond which distance saturates to 1.0
+    # NOTE: battle_map.distance_between() returns FEET -- Chebyshev with 5 ft
+    # per square, diagonals also 5 ft. These thresholds must be in feet too.
+    # They were previously written (and documented) in *squares*, so the
+    # comparisons silently never fired: `in_melee` and `melee_crowd` were
+    # pinned to 0.0 even in contact, and `nearest_dist` saturated at two
+    # squares, making 15 ft and 120 ft indistinguishable to the policy.
+    _MELEE_RANGE = 5.0    # feet -- adjacent square, orthogonal or diagonal
+    _DIST_CAP    = 50.0   # feet (10 squares) beyond which distance saturates
 
     @staticmethod
     def _has_ranged_option(creature) -> bool:
@@ -562,7 +568,7 @@ class TeamMemory:
           1  team HP ratio  (sum alive HP / sum alive max_hp, incl. self)
           2  enemy HP ratio (sum alive enemy HP / sum alive enemy max_hp)
           3  team size advantage  (n_alive_friendly / total_alive)
-          4  nearest enemy distance, normalised to _DIST_CAP squares
+          4  nearest enemy distance, normalised to _DIST_CAP feet
           5  in melee range of any enemy  (0 or 1)
           6  round fraction  (current_round / max_rounds)
           7  any ally under pressure  (0 or 1)

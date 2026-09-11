@@ -19,9 +19,15 @@ setlocal EnableDelayedExpansion
 :: the trained team wins 40-60%% against the no-selector baseline with fights
 :: lasting 10-13 rounds. Eval scenarios are held out of training, so results
 :: measure generalisation rather than fit.
-set RUN_NAME=overnight_run_20260911
-set TRAIN_SCENARIOS=training_ghast_pack.json training_wight_pack.json training_archer_mixed.json
-set EVAL_SCENARIOS=eval_mixed_undead.json eval_archer_skirmish.json
+set RUN_NAME=party_run_20260911
+REM Party scenarios: a 4-PC party, not a lone hero. With one PC on the board
+REM ally_under_pressure (>= 2 enemies on one ally) can never fire, so PROTECT
+REM was a guaranteed no-op and FOCUS_FIRE had one enemy to choose from -- 3 of
+REM the 5 actions aliased the default planner and the policy collapsed onto it.
+REM All three sit at 45-50%% red win under the default AI, and no monster type
+REM is shared between the training set and the held-out eval.
+set TRAIN_SCENARIOS=training_party_skirmish.json training_party_ambush.json
+set EVAL_SCENARIOS=eval_party_warband.json eval_mixed_undead.json
 set PYTHON=python
 set WORKERS=4
 
@@ -54,13 +60,13 @@ set EVO_CROSSOVER_RATE=0.5
 :: 0.4 -> 0.05 over ~22.5k episodes, i.e. ~75%% of the run, same shape as before.
 :: SAVE_EVERY writes the checkpoint + log every N episodes so a crash at
 :: hour 7 keeps hour 7's weights instead of nothing.
-set DQN_EPISODES=30000
+set DQN_EPISODES=25000
 set DQN_HIDDEN=128 64
 set DQN_LR=0.0005
 set DQN_GAMMA=0.95
 set DQN_EPS=0.4
 set DQN_EPS_MIN=0.05
-set DQN_EPS_DECAY=0.99991
+set DQN_EPS_DECAY=0.99989
 set DQN_BUF=50000
 set DQN_BATCH=128
 set DQN_TARGET_FREQ=200
@@ -158,6 +164,7 @@ call :log "  [3/6] RL eval  (%EVAL_EPISODES% episodes per scenario)"
 
 for %%S in (%EVAL_SCENARIOS%) do (
     set RL_SNAME=%%~nS
+    if "!RL_SNAME:~0,5!"=="eval_" set RL_SNAME=!RL_SNAME:~5!
     call :log "    %%S"
     %PYTHON% main.py eval ^
         --json    %%S ^
@@ -185,6 +192,7 @@ call :log "  [4/6] Evo eval  (%EVAL_EPISODES% episodes per scenario)"
 
 for %%S in (%EVAL_SCENARIOS%) do (
     set EVO_SNAME=%%~nS
+    if "!EVO_SNAME:~0,5!"=="eval_" set EVO_SNAME=!EVO_SNAME:~5!
     call :log "    %%S"
     %PYTHON% main.py eval ^
         --json    %%S ^
@@ -247,6 +255,7 @@ call :log "  [6/6] DQN eval  (%EVAL_EPISODES% episodes per scenario)"
 
 for %%S in (%EVAL_SCENARIOS%) do (
     set DQN_SNAME=%%~nS
+    if "!DQN_SNAME:~0,5!"=="eval_" set DQN_SNAME=!DQN_SNAME:~5!
     call :log "    %%S"
     %PYTHON% main.py eval ^
         --json    %%S ^

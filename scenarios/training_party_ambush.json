@@ -1,0 +1,215 @@
+{
+  "name": "Training \u2014 four-PC party ambushed in the warrens",
+  "max_rounds": 30,
+  "rewards": {
+    "damage_scale": 0.02
+  },
+  "map": {
+    "width": 18,
+    "height": 14,
+    "walls": [
+      [
+        7,
+        0,
+        1,
+        5
+      ],
+      [
+        7,
+        9,
+        1,
+        5
+      ],
+      [
+        12,
+        3,
+        1,
+        2
+      ],
+      [
+        12,
+        9,
+        1,
+        2
+      ]
+    ],
+    "difficult_terrain": [
+      [
+        4,
+        5,
+        3,
+        4
+      ],
+      [
+        13,
+        5,
+        3,
+        4
+      ]
+    ]
+  },
+  "players": [
+    {
+      "name": "Thando",
+      "classes": [
+        [
+          "Fighter",
+          5
+        ]
+      ],
+      "subclasses": {
+        "Fighter": "Champion"
+      },
+      "stats": {
+        "Str": 14,
+        "Dex": 19,
+        "Con": 14,
+        "Int": 8,
+        "Wis": 12,
+        "Cha": 10
+      },
+      "choices": [
+        [
+          "Fighter",
+          1,
+          "Fighting Style",
+          "Two-Weapon Fighting"
+        ]
+      ],
+      "items": [
+        "Longsword",
+        "Shortsword",
+        "Chain Mail"
+      ],
+      "equipped": [
+        "Longsword",
+        "Shortsword",
+        "Chain Mail"
+      ],
+      "features": [
+        "Dual Wielder"
+      ]
+    },
+    {
+      "name": "Brendiir",
+      "classes": [
+        [
+          "Ranger",
+          5
+        ]
+      ],
+      "subclasses": {
+        "Ranger": "Gloomstalker"
+      },
+      "stats": {
+        "Str": 10,
+        "Dex": 20,
+        "Con": 14,
+        "Int": 9,
+        "Wis": 16,
+        "Cha": 8
+      },
+      "choices": [
+        [
+          "Ranger",
+          2,
+          "Fighting Style",
+          "Archery"
+        ]
+      ],
+      "items": [
+        "Longbow",
+        "Studded Leather"
+      ],
+      "equipped": [
+        "Longbow",
+        "Studded Leather"
+      ],
+      "features": [
+        "Sharpshooter"
+      ]
+    },
+    {
+      "name": "Kesla",
+      "classes": [
+        [
+          "Cleric",
+          5
+        ]
+      ],
+      "subclasses": {
+        "Cleric": "War"
+      },
+      "stats": {
+        "Str": 14,
+        "Dex": 10,
+        "Con": 14,
+        "Int": 10,
+        "Wis": 17,
+        "Cha": 12
+      },
+      "items": [
+        "Mace",
+        "Shield",
+        "Scale Mail"
+      ],
+      "equipped": [
+        "Mace",
+        "Shield",
+        "Scale Mail"
+      ],
+      "features": [
+        "Tough"
+      ]
+    },
+    {
+      "name": "Vurin",
+      "classes": [
+        [
+          "Rogue",
+          5
+        ]
+      ],
+      "subclasses": {
+        "Rogue": "Thief"
+      },
+      "stats": {
+        "Str": 10,
+        "Dex": 17,
+        "Con": 14,
+        "Int": 13,
+        "Wis": 12,
+        "Cha": 14
+      },
+      "items": [
+        "Rapier",
+        "Shortbow",
+        "Leather Armor"
+      ],
+      "equipped": [
+        "Rapier",
+        "Leather Armor"
+      ],
+      "features": [
+        "Piercer"
+      ]
+    }
+  ],
+  "monsters": [
+    {
+      "type": "ETTIN",
+      "count": 5,
+      "weapon_role": "all"
+    },
+    {
+      "type": "OGRE",
+      "count": 4,
+      "weapon_role": "all"
+    },
+    {
+      "type": "WIGHT",
+      "count": 4,
+      "weapon_role": "all"
+    }
+  ]
+}

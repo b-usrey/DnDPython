@@ -319,6 +319,10 @@ class TacticalAI:
 
         # ── 4. Decide movement path ────────────────────────────────────
         path = []
+        # True while `path` (if any) is an approach to `target`. PROTECT sets
+        # this False when it walks to a pressured ally instead, so the Dash
+        # stage below doesn't overwrite that move with a charge at the enemy.
+        engaging = True
         from core.ml_strategy import Strategy as Strat
 
         # Rule-based disengage safety net — applies regardless of which
@@ -412,10 +416,27 @@ class TacticalAI:
             elif strategy == Strat.KITE:
                 path = self._ranged_move(creature, target, weapon, battle_map)
             elif strategy == Strat.FOCUS_FIRE:
-                # Ignore distance — charge the lowest-HP enemy to finish them fast
+                # Switch to the lowest-HP enemy to finish them off -- but close
+                # the distance with the weapon we actually carry. This used to
+                # call _melee_move() unconditionally, which marched archers out
+                # of their own range to reach a target they could already shoot:
+                # exactly the mistake AGGRESSIVE was fixed for above. It stayed
+                # invisible while every scenario had a single PC, because with
+                # one enemy on the board "the lowest-HP enemy" is the target the
+                # default already picked and the branch was a no-op.
                 focus_target = min(enemies, key=lambda e: e.hp)
-                path         = self._melee_move(creature, focus_target, battle_map)
-                target       = focus_target
+                if focus_target is not target:
+                    target = focus_target
+                    weapon = (
+                        self._pick_weapon(creature, target, weapons, battle_map)
+                        or weapon
+                    )
+                    if trace is not None:
+                        trace["weapon"]["chosen"] = weapon.name if weapon else None
+                if weapon.is_ranged:
+                    path = self._ranged_move(creature, target, weapon, battle_map)
+                else:
+                    path = self._melee_move(creature, target, battle_map)
             elif strategy == Strat.PROTECT:
                 # Move to support the most-pressured living ally
                 under_pressure = [
@@ -435,6 +456,8 @@ class TacticalAI:
                             origin_c, ally_pos, creature.speed, battle_map,
                             creature=creature, stop_adjacent=True
                         )
+                        if path:
+                            engaging = False
             # After strategy overrides movement, still fall through to dash check
 
         # Default movement when no strategy overrides (or strategy is AGGRESSIVE/KITE
@@ -444,25 +467,33 @@ class TacticalAI:
                 path = self._ranged_move(creature, target, weapon, battle_map)
             else:
                 path = self._melee_move(creature, target, battle_map)
-            if path:
-                dest = path[-1]
-                target_pos = battle_map.get_position(target)
-                if target_pos:
-                    dist_after = max(
-                        abs(dest[0] - target_pos[0]),
-                        abs(dest[1] - target_pos[1]),
-                    ) * 5
-                    if dist_after > weapon.normal_range:
-                        # Still out of range after moving — null weapon so
-                        # no attack action is spent, but keep the path so
-                        # the creature keeps advancing each turn.
-                        weapon = None
+
+        # Whether `path` came from a strategy branch or from the default above,
+        # an attack we still cannot reach must not be spent. This check used to
+        # sit *inside* the `if not path:` block, so any strategy that set a path
+        # of its own skipped it -- and since the Dash/Dodge stage below only
+        # runs when `weapon is None`, a creature under any strategy never
+        # dashed either. That is why attaching a selector scored worse than the
+        # plain default AI no matter which strategy it picked.
+        if path and weapon is not None:
+            dest       = path[-1]
+            target_pos = battle_map.get_position(target)
+            if target_pos:
+                dist_after = max(
+                    abs(dest[0] - target_pos[0]),
+                    abs(dest[1] - target_pos[1]),
+                ) * 5
+                if dist_after > weapon.normal_range:
+                    # Still out of range after moving — null weapon so
+                    # no attack action is spent, but keep the path so
+                    # the creature keeps advancing each turn.
+                    weapon = None
 
         # ── 4. Dash / Dodge when target is out of reach ──────────
         use_dash  = False
         use_dodge = False
 
-        if weapon is None:
+        if weapon is None and engaging:
             origin     = battle_map.get_position(creature)
             target_pos = battle_map.get_position(target)
 

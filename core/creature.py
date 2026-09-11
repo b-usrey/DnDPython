@@ -478,7 +478,17 @@ class Creature:
             print(f"{self.name} doesn't have '{item_name}' in inventory")
             return
 
-        if item.item_type in ("weapon", "shield"):
+        # Shields live in data/items.json with item_type "armor" and
+        # armor_type "shield". Without this check they claimed the *body
+        # armour* slot, so "Mace, Shield, Scale Mail" silently equipped the
+        # shield and refused the scale mail -- no character could ever wear
+        # armour and carry a shield at the same time.
+        is_shield = (
+            item.item_type == "shield"
+            or getattr(item, "armor_type", "") == "shield"
+        )
+
+        if item.item_type == "weapon" or is_shield:
             is_two_handed = hasattr(item, "properties") and "two-handed" in item.properties
             if is_two_handed:
                 if not self.equipped_slots["hand1"] and not self.equipped_slots["hand2"]:
