@@ -35,6 +35,11 @@ Schema — one record per line
                  which ability spent it)
     downed       round, creature, team
     combat_end   round, winner_team, survivors
+    decision     round, creature, team, hp, max_hp, plus the planner's
+                 candidate tables -- target/weapon/strategy/movement, each
+                 listing what was considered and what it scored, not just
+                 what won. Only emitted when TacticalAI(trace_enabled=True);
+                 see core/tactical_ai.py for why it's opt-in.
 """
 from __future__ import annotations
 
@@ -62,6 +67,7 @@ class CombatLogger:
         event_bus.subscribe("resource_spent",       self._on_resource_spent)
         event_bus.subscribe("creature_downed",      self._on_downed)
         event_bus.subscribe("CombatEnded",          self._on_combat_ended)
+        event_bus.subscribe("decision",             self._on_decision)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -211,6 +217,12 @@ class CombatLogger:
             **self._creature_fields(creature),
             "hp_final": creature.hp,
         })
+
+    def _on_decision(self, data: dict) -> None:
+        trace = data.get("trace")
+        if not trace:
+            return
+        self._write({"type": "decision", "round": self._round, **trace})
 
     def _on_combat_ended(self, data: dict) -> None:
         survivors = data.get("survivors", [])

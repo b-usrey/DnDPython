@@ -130,13 +130,92 @@ class TacticalAI:
     DISENGAGE_THRESHOLD = 0.25
     KITE_DISTANCE = 3
 
-    def __init__(self, strategy_selector=None, trained_team=None):
+    def __init__(self, strategy_selector=None, trained_team=None, trace_enabled=False):
         self.strategy_selector = strategy_selector
         # trained_team gates the selector so it only fires for creatures
         # on that team.  None means "apply to all" (training mode).
         self.trained_team = trained_team
         # current_strategy can also be set externally by StrategyTrainer
         self.current_strategy = None
+        # Decision tracing: records the *rejected* options alongside the
+        # chosen one so a UI can show why a creature did what it did.
+        # Off by default -- a full candidate table per creature per turn is
+        # far too much data for a 20k-episode training run, and it's only
+        # ever wanted for a single explainer playthrough.
+        self.trace_enabled = trace_enabled
+
+    # ------------------------------------------------------------------
+    # Decision tracing
+    #
+    # Everything below is observational: it re-runs the same scoring
+    # helpers the real decision used, on the same inputs, purely to record
+    # what the alternatives scored. It never feeds back into the decision,
+    # so enabling tracing cannot change how a fight plays out.
+    # ------------------------------------------------------------------
+
+    def _trace_targets(self, creature, enemies, battle_map, memory) -> list[dict]:
+        rows = []
+        for enemy in enemies:
+            try:
+                dist = battle_map.distance_between(creature, enemy)
+            except LookupError:
+                dist = None
+            row = {
+                "name":        enemy.name,
+                "hp":          enemy.hp,
+                "max_hp":      enemy.max_hp,
+                "distance_ft": dist,
+            }
+            if memory is not None:
+                row["threat"]           = round(float(memory.threat_level(enemy)), 2)
+                row["effective_danger"] = round(float(memory.effective_danger_score(enemy)), 2)
+            rows.append(row)
+        return rows
+
+    def _trace_weapons(self, creature, target, weapons, battle_map) -> list[dict]:
+        try:
+            dist = battle_map.distance_between(creature, target)
+        except LookupError:
+            dist = 0
+        is_concentrating = bool(getattr(creature, "concentration", None))
+
+        rows = []
+        for weapon in weapons:
+            result = battle_map.check_attack_range(
+                creature, target,
+                is_ranged=weapon.is_ranged,
+                normal_range=weapon.normal_range,
+                long_range=weapon.long_range,
+            )
+            rows.append({
+                "name":         weapon.name,
+                "is_ranged":    weapon.is_ranged,
+                "normal_range": weapon.normal_range,
+                "score":        round(self._score_weapon(weapon, target, dist, is_concentrating), 2),
+                "p_hit":        round(self._hit_probability(weapon, target), 3),
+                "in_range":     bool(result),
+            })
+        return rows
+
+    def _emit_trace(self, creature, decision, trace: dict) -> None:
+        """Broadcast the assembled trace so CombatLogger can record it."""
+        bus = getattr(creature, "event_manager", None)
+        if bus is None:
+            return
+        trace["creature"] = creature.name
+        trace["team"]     = creature.team
+        trace["hp"]       = creature.hp
+        trace["max_hp"]   = creature.max_hp
+        trace["outcome"]  = {
+            "target":    decision.target.name if decision.target else None,
+            "weapon":    decision.weapon.name if decision.weapon else None,
+            "reason":    decision.reason,
+            "steps":     len(decision.path),
+            "use_dash":  decision.use_dash,
+            "use_dodge": decision.use_dodge,
+            "skip":      decision.skip,
+        }
+        bus.broadcast("decision", {"creature": creature, "trace": trace})
 
     def plan_turn(
         self,
@@ -151,6 +230,14 @@ class TacticalAI:
         target selection and threat assessment use shared team intelligence instead
         of purely individual observation.
         """
+        trace = {} if self.trace_enabled else None
+
+        def finish(decision):
+            """Emit the trace (when enabled) and hand the decision back."""
+            if trace is not None:
+                self._emit_trace(creature, decision, trace)
+            return decision
+
         if not creature.is_alive():
             _log.debug("[%s] %s: skipping turn — dead", creature.team, creature.name)
             return TacticalDecision(skip=True, reason="creature is dead")
@@ -158,7 +245,8 @@ class TacticalAI:
         if creature.has_condition("incapacitated") or creature.has_condition("unconscious"):
             _log.info("[%s] %s: skipping turn — %s", creature.team, creature.name,
                       ", ".join(creature.conditions))
-            return TacticalDecision(skip=True, reason=f"creature is {list(creature.conditions)}")
+            return finish(TacticalDecision(
+                skip=True, reason=f"creature is {list(creature.conditions)}"))
 
         enemies = battle_map.enemies_of(creature)
         if not enemies:
@@ -166,15 +254,30 @@ class TacticalAI:
             return TacticalDecision(skip=True, reason="no enemies on map")
 
         # ── 1. Pick target ─────────────────────────────────────────────
+        if trace is not None:
+            trace["target"] = {
+                "basis":      "team_memory" if memory else "fallback_hp_distance",
+                "candidates": self._trace_targets(creature, enemies, battle_map, memory),
+            }
+
         target = self._pick_target(creature, enemies, battle_map, memory)
+
+        if trace is not None:
+            trace["target"]["chosen"] = target.name if target else None
 
         # ── 2. Pick weapon ─────────────────────────────────────────────
         weapons = self._get_weapon_profiles(creature)
         if not weapons:
             _log.info("[%s] %s: skipping turn — no weapons", creature.team, creature.name)
-            return TacticalDecision(skip=True, reason="no weapons available")
+            return finish(TacticalDecision(skip=True, reason="no weapons available"))
 
         weapon = self._pick_weapon(creature, target, weapons, battle_map)
+
+        if trace is not None:
+            trace["weapon"] = {
+                "candidates": self._trace_weapons(creature, target, weapons, battle_map),
+                "chosen":     weapon.name if weapon else None,
+            }
 
         # ── 3. Resolve strategy ────────────────────────────────────────
         # Priority: selector > externally-set current_strategy > rule-based
@@ -194,9 +297,25 @@ class TacticalAI:
             obs      = memory.get_state_vector(creature, enemies, allies)
             strategy = self.strategy_selector.select(obs)
             _log.debug("[%s] %s: ML strategy → %s", creature.team, creature.name, strategy)
+            if trace is not None:
+                # q_values is optional -- a selector that can't score every
+                # option (e.g. the random baseline) simply doesn't expose it.
+                scorer = getattr(self.strategy_selector, "q_values", None)
+                trace["strategy"] = {
+                    "source":   type(self.strategy_selector).__name__,
+                    "obs":      [round(float(x), 3) for x in obs],
+                    "q_values": scorer(obs) if callable(scorer) else None,
+                }
         elif self.current_strategy is not None:
             strategy = self.current_strategy
             _log.debug("[%s] %s: fixed strategy → %s", creature.team, creature.name, strategy)
+            if trace is not None:
+                trace["strategy"] = {"source": "fixed", "obs": None, "q_values": None}
+        elif trace is not None:
+            trace["strategy"] = {"source": "rule_based", "obs": None, "q_values": None}
+
+        if trace is not None:
+            trace["strategy"]["chosen"] = strategy.name if strategy is not None else None
 
         # ── 4. Decide movement path ────────────────────────────────────
         path = []
@@ -232,10 +351,18 @@ class TacticalAI:
                 100 * creature.hp / max(creature.max_hp, 1),
                 100 * self.DISENGAGE_THRESHOLD,
             )
-            return TacticalDecision(
+            if trace is not None:
+                trace["movement"] = {
+                    "action":        "disengage",
+                    "trigger":       "hp below disengage threshold",
+                    "hp_pct":        round(creature.hp / max(creature.max_hp, 1), 3),
+                    "threshold_pct": self.DISENGAGE_THRESHOLD,
+                    "away_from":     retreat_from.name,
+                }
+            return finish(TacticalDecision(
                 target=target, path=path, weapon=weapon,
                 reason="disengaging — low HP",
-            )
+            ))
 
         # RETREAT strategy — always disengage regardless of HP threshold
         if strategy is not None:
@@ -260,10 +387,16 @@ class TacticalAI:
                     creature.team, creature.name, retreat_from.name,
                     100 * creature.hp / max(creature.max_hp, 1),
                 )
-                return TacticalDecision(
+                if trace is not None:
+                    trace["movement"] = {
+                        "action":    "retreat",
+                        "trigger":   "strategy RETREAT",
+                        "away_from": retreat_from.name,
+                    }
+                return finish(TacticalDecision(
                     target=target, path=path, weapon=weapon,
                     reason=f"strategy: RETREAT",
-                )
+                ))
             elif strategy == Strat.AGGRESSIVE:
                 # Respect the weapon type _pick_weapon already chose, same
                 # as the no-strategy default below -- AGGRESSIVE means
@@ -386,14 +519,43 @@ class TacticalAI:
             len(path),
         )
 
-        return TacticalDecision(
+        if trace is not None:
+            try:
+                dist_before = battle_map.distance_between(creature, target)
+            except LookupError:
+                dist_before = None
+            dist_after = dist_before
+            target_pos = battle_map.get_position(target)
+            if path and target_pos:
+                dest = path[-1]
+                dist_after = max(abs(dest[0] - target_pos[0]),
+                                 abs(dest[1] - target_pos[1])) * 5
+            if use_dash:
+                action = "dash"
+            elif use_dodge:
+                action = "dodge"
+            elif not path:
+                action = "hold"
+            elif dist_before is not None and dist_after is not None and dist_after > dist_before:
+                action = "withdraw"
+            else:
+                action = "approach"
+            trace["movement"] = {
+                "action":          action,
+                "trigger":         reason,
+                "distance_before": dist_before,
+                "distance_after":  dist_after,
+                "steps":           len(path),
+            }
+
+        return finish(TacticalDecision(
             target=target,
             path=path,
             weapon=weapon,
             use_dash=use_dash,
             use_dodge=use_dodge,
             reason=reason,
-        )
+        ))
 
     # ------------------------------------------------------------------
     # Hit probability and damage helpers

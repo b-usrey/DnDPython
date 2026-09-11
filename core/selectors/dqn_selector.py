@@ -135,6 +135,20 @@ class DQNStrategySelector(StrategySelector):
         self.tactic_counts[result] += 1
         return result
 
+    def q_values(self, obs: list[float]) -> dict[str, float]:
+        """
+        Q(s,a) for every strategy, as {strategy_name: value}.
+
+        Only used for decision tracing -- select() takes the argmax of the
+        same tensor, so this exposes the *rejected* options and how close
+        they were, which is the part a "why did it do that" view needs.
+        """
+        with torch.no_grad():
+            t = torch.tensor(obs[:self.n_obs], dtype=torch.float32,
+                             device=self._device).unsqueeze(0)
+            values = self._online(t).squeeze(0).tolist()
+        return {s.name: round(float(v), 4) for s, v in zip(Strategy, values)}
+
     def state_value(self, obs) -> float:
         """
         V(s) = max_a Q_target(s,a) under the target network -- used as the
