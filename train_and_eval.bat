@@ -60,18 +60,18 @@ set EVO_CROSSOVER_RATE=0.5
 :: 0.4 -> 0.05 over ~22.5k episodes, i.e. ~75%% of the run, same shape as before.
 :: SAVE_EVERY writes the checkpoint + log every N episodes so a crash at
 :: hour 7 keeps hour 7's weights instead of nothing.
-set DQN_EPISODES=25000
+set DQN_EPISODES=18000
 set DQN_HIDDEN=128 64
 set DQN_LR=0.0005
 set DQN_GAMMA=0.95
 set DQN_EPS=0.4
 set DQN_EPS_MIN=0.05
-set DQN_EPS_DECAY=0.99989
+set DQN_EPS_DECAY=0.999846
 set DQN_BUF=50000
 set DQN_BATCH=128
 set DQN_TARGET_FREQ=200
 set DQN_PRINT_EVERY=500
-set DQN_WARM_START=300
+set DQN_WARM_START=600
 set DQN_SAVE_EVERY=500
 
 set EVAL_EPISODES=1000

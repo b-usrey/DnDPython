@@ -55,30 +55,31 @@ EVO_MUTATION_SCALE=0.1
 EVO_CROSSOVER_RATE=0.5
 
 # DQN -- sized to an ~8h overnight budget. The party scenarios run ~1.1-1.2
-# s/episode (17 creatures, ~20 rounds) against ~0.33 s for the old solo
+# s/episode locally and ~1.30 s on usreyhome (17 creatures, ~20 rounds)
+# against ~0.33 s for the old solo
 # fights, so the episode count comes down even though each episode now
 # carries far more decision points.
 # Warm start clones the heuristic teacher first, so eps starts at 0.4 rather
-# than 1.0 (exploring at 1.0 would throw the prior away). 0.99989 decays
-# 0.4 -> 0.05 over ~18.75k episodes, i.e. ~75% of the run.
+# than 1.0 (exploring at 1.0 would throw the prior away). 0.999846 decays
+# 0.4 -> 0.05 over ~13.5k episodes, i.e. ~75% of the run.
 # SAVE_EVERY writes the checkpoint + log every N episodes so a crash at
 # hour 7 keeps hour 7's weights instead of nothing.
 # Every DQN knob is env-overridable (DQN_EPISODES=50000 bash train_and_eval.sh)
 # so a faster or slower box can fill its budget without editing the file.
 # If you change DQN_EPISODES, retune DQN_EPS_DECAY so eps still reaches the
 # floor ~75% of the way through: decay = exp(ln(EPS_MIN/EPS) / (0.75*EPISODES)).
-DQN_EPISODES=${DQN_EPISODES:-25000}
+DQN_EPISODES=${DQN_EPISODES:-18000}
 DQN_HIDDEN=${DQN_HIDDEN:-"128 64"}
 DQN_LR=${DQN_LR:-0.0005}
 DQN_GAMMA=${DQN_GAMMA:-0.95}
 DQN_EPS=${DQN_EPS:-0.4}
 DQN_EPS_MIN=${DQN_EPS_MIN:-0.05}
-DQN_EPS_DECAY=${DQN_EPS_DECAY:-0.99989}
+DQN_EPS_DECAY=${DQN_EPS_DECAY:-0.999846}
 DQN_BUF=${DQN_BUF:-50000}
 DQN_BATCH=${DQN_BATCH:-128}
 DQN_TARGET_FREQ=${DQN_TARGET_FREQ:-200}
 DQN_PRINT_EVERY=${DQN_PRINT_EVERY:-500}
-DQN_WARM_START=${DQN_WARM_START:-300}
+DQN_WARM_START=${DQN_WARM_START:-600}
 DQN_SAVE_EVERY=${DQN_SAVE_EVERY:-500}
 
 EVAL_EPISODES=1000
