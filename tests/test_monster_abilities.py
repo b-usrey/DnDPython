@@ -461,3 +461,41 @@ def test_every_monster_fights_without_error(key):
     env = CombatEnv(scen, trained_team="red", silent=True)
     with _quiet():
         env.run_episode(None)
+
+
+# ── what the webapp sees ─────────────────────────────────────────────────────
+
+def test_rider_damage_is_part_of_the_attack_record(d20):
+    """A dragon bite's extra poison has no save, so it must ride on the
+    attack's own record or the webapp's damage stats never see it."""
+    from utils.combat_logger import CombatLogger
+    cm = _combat([{"type": "YOUNG_GREEN_DRAGON", "count": 1, "weapon_role": "all"}],
+                 positions={"Hero": [5, 5], "monsters": [[4, 5]]})
+    dragon, hero = _find(cm, "Young Green Dragon"), _find(cm, "Hero")
+    logger = CombatLogger(cm.event, cm.initiative)
+    bite = next(p for p in cm.ai._get_weapon_profiles(dragon) if p.name == "Bite")
+    before = hero.hp
+    d20(15)            # hits AC 16, not a crit; every die rolls its maximum
+    with _quiet():
+        cm._execute_attack(dragon, hero, bite)
+    record = [r for r in logger.records if r.get("type") == "attack"][-1]
+    assert record["damage"] == 24 + 12        # 2d10+4 piercing, then 2d6 poison
+    assert before - hero.hp == 36
+
+
+def test_breath_damage_names_its_source_and_its_reason():
+    from utils.combat_logger import CombatLogger
+    party = [_hero("Ana"), _hero("Bo"), _hero("Cy")]
+    cm = _combat([{"type": "YOUNG_GREEN_DRAGON", "count": 1, "weapon_role": "all"}],
+                 positions={"Ana": [6, 4], "Bo": [6, 5], "Cy": [6, 6], "monsters": [[3, 5]]},
+                 players=party)
+    dragon = _find(cm, "Young Green Dragon")
+    logger = CombatLogger(cm.event, cm.initiative)
+    with _quiet():
+        cm._run_turn(dragon)
+    saves = [r for r in logger.records if r.get("type") == "save_damage"]
+    assert saves and all(r["source"] == "Poison Breath" for r in saves)
+    actions = [r for r in logger.records if r.get("type") == "monster_action"]
+    assert actions and actions[0]["action"] == "Poison Breath"
+    assert actions[0]["expected"] >= actions[0]["attack_expected"]
+

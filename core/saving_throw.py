@@ -63,6 +63,7 @@ class SaveResult:
     damage_type:   str = ""
     on_save:       object = None   # DamageOnSave value — used by Indomitable to reverse damage
     notes:         list = field(default_factory=list)
+    source:        object = None   # what forced the save, e.g. "Poison Breath"
 
     def __str__(self):
         outcome  = "SUCCESS" if self.success else "FAILURE"
@@ -106,6 +107,7 @@ class SavingThrow:
         condition_on_fail: str | None = None,
         advantage:         bool = False,
         disadvantage:      bool = False,
+        source:            str | None = None,
     ) -> SaveResult:
         """
         Resolve a saving throw and apply its consequences.
@@ -198,6 +200,7 @@ class SavingThrow:
             damage_dealt = damage_dealt,
             damage_type  = damage_type,
             on_save      = on_save,
+            source       = source,
             notes        = notes,
         )
 

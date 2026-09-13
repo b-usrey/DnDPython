@@ -201,11 +201,17 @@ class MonsterRiders(_MonsterFeature):
             on_save = (DamageOnSave.HALF if rider.get("save_effect", "half") == "half"
                        else DamageOnSave.NONE)
             res = SavingThrow.roll(caster=owner, target=target, ability=save, dc=dc,
-                                   on_save=on_save, damage=dmg, damage_type=extra_type)
+                                   on_save=on_save, damage=dmg, damage_type=extra_type,
+                                   source=rider_source(attack))
             failed = not res.success
             dealt  = res.damage_dealt
         elif extra:
             dealt = target.take_damage(_roll(extra, crit), damage_type=extra_type)
+            # No save means no save record, so fold this into the attack's
+            # own record -- riders run before attack_resolved is logged. Without
+            # it a dragon's bite poison never appeared in the webapp's damage.
+            if attack is not None and dealt:
+                attack.result["damage"] = (attack.result.get("damage", 0) or 0) + dealt
             if dealt:
                 print(f"  {target.name} takes {dealt} {extra_type} damage "
                       f"from {owner.name}'s {rider_source(attack)}.")
@@ -449,7 +455,8 @@ class MonsterAction(_AoESpell):
                 continue
             res = SavingThrow.roll(caster=caster, target=t, ability=self.SAVE_ABILITY,
                                    dc=self.dc, on_save=on_save,
-                                   damage=max(0, dmg), damage_type=self.damage_type)
+                                   damage=max(0, dmg), damage_type=self.damage_type,
+                                   source=self.action_name)
             if self.condition and not res.success and t.is_alive():
                 t.add_condition(self.condition)
 

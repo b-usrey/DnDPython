@@ -68,6 +68,7 @@ class CombatLogger:
         event_bus.subscribe("creature_downed",      self._on_downed)
         event_bus.subscribe("CombatEnded",          self._on_combat_ended)
         event_bus.subscribe("decision",             self._on_decision)
+        event_bus.subscribe("monster_action",       self._on_monster_action)
 
     # ------------------------------------------------------------------
     # Helpers
@@ -165,6 +166,25 @@ class CombatLogger:
             "damage_type":  result.damage_type,
             "save_ability": result.ability,
             "save_success": result.success,
+            # Which ability forced the save -- "Poison Breath", say -- so the
+            # damage can be attributed to it, not just to the caster.
+            "source":       getattr(result, "source", None),
+        })
+
+    def _on_monster_action(self, data: dict) -> None:
+        """A breath weapon or other special action, with the numbers behind
+        the choice: its expected damage against the attacks it replaced."""
+        creature = data.get("creature")
+        if not creature:
+            return
+        self._write({
+            "type":            "monster_action",
+            "round":           self._round,
+            **self._creature_fields(creature),
+            "action":          data.get("action"),
+            "targets":         list(data.get("targets", [])),
+            "expected":        data.get("expected"),
+            "attack_expected": data.get("attack_expected"),
         })
 
     def _on_move(self, data: dict) -> None:
