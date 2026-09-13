@@ -36,6 +36,94 @@ _log = logging.getLogger(__name__)
 # WeaponProfile — lightweight description of an attack option
 # ---------------------------------------------------------------------------
 
+from core.monster_stats import template_dice_str
+
+
+# How much a condition inflicted on a hit is worth, in damage-equivalent
+# points. A paralyzed PC loses its turn and eats auto-crits, so a ghoul's
+# claws (2d4+2, DC 10 paralysis) should beat its bite (2d6+2, no rider) --
+# on raw damage alone the planner always chose the bite and never paralyzed.
+_CONDITION_VALUE = {
+    "paralyzed": 12.0, "stunned": 12.0, "petrified": 12.0,
+    "restrained": 4.0, "blinded": 4.0, "frightened": 3.0,
+    "prone": 2.0, "poisoned": 2.0,
+}
+
+
+def _is_magical(weapon) -> bool:
+    item = getattr(weapon, "item", None)
+    if item is not None:
+        return bool(getattr(item, "magic_bonus", 0) or getattr(item, "attack_bonus", 0) > 0
+                    or getattr(item, "is_spell", False) or "+" in getattr(item, "name", ""))
+    return bool((getattr(weapon, "template", None) or {}).get("magical", False))
+
+
+def _damage_factor(weapon, target) -> float:
+    """Multiplier from the target's immunities, resistances and vulnerabilities."""
+    dtype = (getattr(weapon, "damage_type", "") or "").lower()
+    if not dtype:
+        return 1.0
+    if dtype in getattr(target, "immunities", ()):
+        return 0.0
+    physical = dtype in ("bludgeoning", "piercing", "slashing")
+    nonmag   = getattr(target, "nonmagical_physical", None)
+    if physical and nonmag == "immune" and not _is_magical(weapon):
+        return 0.0
+    factor = 1.0
+    if dtype in getattr(target, "resistances", ()) or (
+            physical and nonmag == "resist" and not _is_magical(weapon)):
+        factor *= 0.5
+    if dtype in getattr(target, "vulnerabilities", ()):
+        factor *= 2.0
+    return factor
+
+
+def _save_fail_chance(target, ability, dc) -> float:
+    sb = getattr(target, "statblock", None)
+    try:
+        mod = sb.save_bonus(ability)
+    except (AttributeError, KeyError, ValueError):
+        mod = getattr(sb, "mods", {}).get(ability, 0) if sb else 0
+    return 1.0 - max(0.05, min(0.95, (21 - dc + mod) / 20.0))
+
+
+def _rider_value(weapon, target) -> float:
+    """Expected extra value of an attack template's on-hit rider, per hit."""
+    rider = (getattr(weapon, "template", None) or {}).get("on_hit")
+    if not rider:
+        return 0.0
+    if getattr(target, "creature_type", None) in rider.get("not_types", []):
+        return 0.0
+    save, dc = rider.get("save"), rider.get("dc")
+    p_fail = _save_fail_chance(target, save, dc) if (save and dc) else 1.0
+    value = 0.0
+    extra = rider.get("extra_damage")
+    if extra:
+        try:
+            n, sides = str(extra).lower().split("d")
+            avg = int(n) * (int(sides) + 1) / 2.0
+        except ValueError:
+            avg = 0.0
+        etype = rider.get("extra_damage_type", "")
+        if etype in getattr(target, "immunities", ()):
+            avg = 0.0
+        elif etype in getattr(target, "resistances", ()):
+            avg *= 0.5
+        if save and dc:
+            half = rider.get("save_effect", "half") == "half"
+            avg *= (p_fail + (1.0 - p_fail) * 0.5) if half else p_fail
+        value += avg
+    cond = rider.get("condition")
+    if cond and cond not in getattr(target, "condition_immunities", ()):
+        has = getattr(target, "has_condition", None)
+        if not (has and has(cond)):
+            p = 1.0 if rider.get("escape") else p_fail
+            value += p * _CONDITION_VALUE.get(cond, 2.0)
+    if rider.get("max_hp_reduction"):
+        value += 2.0 * p_fail
+    return value
+
+
 class WeaponProfile:
     """
     Describes one attack option available to a creature.
@@ -51,6 +139,8 @@ class WeaponProfile:
         attack_bonus: int = 0,
         damage_die: str = "1d6",
         damage_mod: int = 0,
+        damage_type: str = "bludgeoning",
+        template: dict | None = None,   # raw monster attack dict, for on-hit riders
     ):
         self.name = name
         self.is_ranged = is_ranged
@@ -60,6 +150,8 @@ class WeaponProfile:
         self.attack_bonus = attack_bonus
         self.damage_die = damage_die
         self.damage_mod = damage_mod
+        self.damage_type = damage_type
+        self.template = template
 
     def __repr__(self):
         kind = "ranged" if self.is_ranged else "melee"
@@ -242,7 +334,13 @@ class TacticalAI:
             _log.debug("[%s] %s: skipping turn — dead", creature.team, creature.name)
             return TacticalDecision(skip=True, reason="creature is dead")
 
-        if creature.has_condition("incapacitated") or creature.has_condition("unconscious"):
+        # Paralyzed, stunned and petrified all include incapacitated. This used
+        # to check only "incapacitated", so a creature under Hold Person or a
+        # ghoul's paralysis still took its whole turn.
+        _incap = getattr(creature, "is_incapacitated", None)
+        if (_incap() if _incap else
+                (creature.has_condition("incapacitated")
+                 or creature.has_condition("unconscious"))):
             _log.info("[%s] %s: skipping turn — %s", creature.team, creature.name,
                       ", ".join(creature.conditions))
             return finish(TacticalDecision(
@@ -740,6 +838,7 @@ class TacticalAI:
                 attack_bonus=atk_bonus,
                 damage_die=getattr(item, "damage_die", "1d6"),
                 damage_mod=dmg_bonus,
+                damage_type=getattr(item, "damageType", "bludgeoning"),
             ))
 
         # Raw monster attack list (for creatures built from templates)
@@ -754,8 +853,10 @@ class TacticalAI:
                 normal_range=normal_range,
                 long_range=long_range,
                 attack_bonus=atk.get("attack_bonus", 0),
-                damage_die=f"1d{atk.get('damage_die', 6)}",
+                damage_die=template_dice_str(atk),
                 damage_mod=atk.get("damage_mod", 0),
+                damage_type=atk.get("damage_type", "bludgeoning"),
+                template=atk,
             ))
 
         return profiles
@@ -797,9 +898,11 @@ class TacticalAI:
             _hc("paralyzed") or _hc("restrained") or _hc("blinded") or _hc("stunned")
         )
 
+        avg *= _damage_factor(weapon, target)
+
         p_straight = hit_probability(weapon.attack_bonus, target.ac)
         p_hit      = (1.0 - (1.0 - p_straight) ** 2) if has_advantage else p_straight
-        score      = p_hit * avg
+        score      = p_hit * (avg + _rider_value(weapon, target))
 
         if weapon.is_ranged and is_concentrating:
             score *= 1.5   # protect concentration — stay out of melee

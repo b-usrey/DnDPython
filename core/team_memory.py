@@ -27,6 +27,7 @@ parameter added to plan_turn and _pick_target).
 """
 
 from __future__ import annotations
+from core.monster_stats import template_average
 
 import logging
 from collections import defaultdict
@@ -122,8 +123,7 @@ class ThreatProfile:
             except (ValueError, AttributeError):
                 pass
         for atk in getattr(c, "_attack_templates", []):
-            sides = atk.get("damage_die", 6)
-            totals.append((sides + 1) / 2.0 + atk.get("damage_mod", 0))
+            totals.append(template_average(atk))
         return sum(totals) / len(totals) if totals else 5.0
 
     @property

@@ -363,7 +363,8 @@ class BattleMap:
                 continue
             if other.team == mover.team:
                 continue  # allies don't get OA
-            if other.has_condition("incapacitated"):
+            _incap = getattr(other, "is_incapacitated", None)
+            if (_incap() if _incap else other.has_condition("incapacitated")):
                 continue  # incapacitated creatures can't react
             if other.has_condition("unconscious"):
                 continue  # unconscious creatures can't react either (e.g. dying at 0 HP)

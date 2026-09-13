@@ -23,6 +23,7 @@ import enum
 from core.tactical_ai import TacticalAI, WeaponProfile
 from core.attack import WeaponAttack
 from core.team_memory import TeamMemory
+from core.monster_stats import parse_dice
 
 
 # ---------------------------------------------------------------------------
@@ -79,6 +80,9 @@ class CombatManager:
         for _c in battle_map.all_creatures():
             _c.team_memory = self.memories.get(_c.team)
             _c.battle_map  = battle_map
+            # Lets monster abilities act through combat -- legendary
+            # actions resolve attacks outside the creature's own turn.
+            _c.combat      = self
 
     def set_mode(self, mode: CombatMode) -> None:
         self.mode = mode
@@ -152,6 +156,14 @@ class CombatManager:
               f"(HP: {creature.hp}/{creature.max_hp}  AC: {creature.ac})")
 
         creature.start_turn()
+        # An incapacitated creature can take no actions or reactions. Zero
+        # them before TurnStarted, or a paralyzed caster's spell features
+        # would still find an action to spend there.
+        _incap = getattr(creature, "is_incapacitated", None)
+        if _incap and _incap():
+            creature.actions.actions       = 0
+            creature.actions.bonus_actions = 0
+            creature.actions.reactions     = 0
         self.event.broadcast("TurnStarted", {
             "round": self.initiative.round,
             "creature": creature,
@@ -361,6 +373,12 @@ class CombatManager:
             creature.add_condition("dodging")
             print(f"  {creature.name} takes the Dodge action.")
 
+        # Monster actions (breath weapons, recharge abilities) decide here,
+        # after movement, so a dragon closes in and then breathes. One that
+        # spends the action leaves none for the attack below, which is then
+        # skipped -- a breath weapon replaces the multiattack, as in 5e.
+        self.event.broadcast("action_phase", {"creature": creature, "decision": decision})
+
         # Attack — fire main attack, extra attacks, then Action Surge if available
         attacked = False
         if decision.target and decision.weapon and creature.actions.use_action():
@@ -424,6 +442,16 @@ class CombatManager:
         if not silent:
             print(f"  {creature.name} moves to ({col}, {row})")
 
+        # Nimble Escape: a goblin Disengages as a bonus action rather than
+        # eat an opportunity attack on the way out.
+        if (oa_targets and getattr(creature, "nimble_escape", False)
+                and not getattr(creature, "_disengaged", False)
+                and creature.actions.use_bonus_action()):
+            creature._disengaged = True
+            print(f"  {creature.name} uses Nimble Escape to Disengage!")
+        if getattr(creature, "_disengaged", False):
+            oa_targets = []
+
         # Trigger opportunity attacks BEFORE committing position so the
         # attacker is still adjacent for the range check.
         for attacker in oa_targets:
@@ -439,6 +467,51 @@ class CombatManager:
         self.battle_map.commit_move(creature, col, row)
 
         return cost
+
+    def monster_attack_out_of_turn(self, creature, attack_name=None) -> bool:
+        """
+        Resolve one attack outside the creature's own turn -- a legendary
+        action's Tail Attack, say. Uses the named template if given,
+        otherwise the best option in range, against the weakest enemy that
+        option can reach. Returns True if an attack was made.
+        """
+        profiles = [p for p in self.ai._get_weapon_profiles(creature)
+                    if attack_name is None or p.name == attack_name]
+        for prof in sorted(profiles, key=self.ai._expected_damage, reverse=True):
+            reachable = []
+            for enemy in self.battle_map.enemies_of(creature):
+                if not enemy.is_alive():
+                    continue
+                try:
+                    ok = self.battle_map.check_attack_range(
+                        creature, enemy, is_ranged=prof.is_ranged,
+                        normal_range=prof.normal_range,
+                        long_range=prof.long_range).valid
+                except LookupError:
+                    ok = False
+                if ok:
+                    reachable.append(enemy)
+            if reachable:
+                self._execute_attack(creature, min(reachable, key=lambda e: e.hp), prof)
+                return True
+        return False
+
+    def _opportunity_weapon(self, attacker):
+        """
+        The attacker's best melee option, for an opportunity attack.
+
+        Spell pseudo-weapons (Inflict Wounds and friends) are excluded:
+        an opportunity attack is a melee *weapon* attack, not a spell.
+        Returns None if the creature has no melee option at all.
+        """
+        profiles = [
+            p for p in self.ai._get_weapon_profiles(attacker)
+            if not p.is_ranged
+            and not getattr(getattr(p, "item", None), "is_spell", False)
+        ]
+        if not profiles:
+            return None
+        return max(profiles, key=self.ai._expected_damage)
 
     def _do_attack_action(self, creature, target, weapon) -> None:
         """
@@ -476,7 +549,10 @@ class CombatManager:
             for feat in creature.features:
                 if not creature.actions.bonus_actions:
                     break
-                if hasattr(feat, "activate") and feat.name == "Nature's Veil":
+                # Feature instances are named after their class ("NaturesVeil");
+                # the display name lives on the class. Comparing feat.name to
+                # "Nature's Veil" never matched, so this never fired.
+                if hasattr(feat, "activate") and getattr(type(feat), "name", feat.name) == "Nature's Veil":
                     hp_frac = creature.hp / max(creature.max_hp, 1)
                     if hp_frac < 0.5 and not creature.has_condition("invisible"):
                         feat.activate()
@@ -545,6 +621,13 @@ class CombatManager:
         Resolve an attack. weapon can be an Item, WeaponProfile, or None.
         Validates range via BattleMap before rolling.
         """
+        # Opportunity attacks arrive with weapon=None. That used to fall
+        # through to the WeaponAttack placeholder below -- 1d6, +0 to hit,
+        # +0 damage -- for PCs and monsters alike. Use the attacker's best
+        # melee option instead, as the rules require.
+        if weapon is None:
+            weapon = self._opportunity_weapon(attacker)
+
         # Determine range parameters
         is_ranged = False
         normal_range = 5
@@ -583,6 +666,26 @@ class CombatManager:
         # For monster attacks (no Item), preserve the weapon name for the logger
         if item_obj is None and weapon is not None:
             atk._weapon_name_hint = getattr(weapon, "name", None)
+
+        # Monster attack templates carry their own numbers. WeaponAttack only
+        # reads stats from an Item, so without this every template attack
+        # rolled the constructor placeholder -- +0 to hit, 1d6, +0 damage,
+        # bludgeoning -- whatever the stat block said. A hill giant's +8
+        # 1d8+5 greatclub was resolving as a +0 1d6 slap.
+        if item_obj is None and weapon is not None and hasattr(weapon, "attack_bonus"):
+            atk.base_dice   = parse_dice(weapon.damage_die)
+            atk.to_hit_mod  = weapon.attack_bonus
+            atk.damage_mod  = weapon.damage_mod
+            atk.damage_type = getattr(weapon, "damage_type", "bludgeoning") or "bludgeoning"
+            atk.range       = bool(weapon.is_ranged)
+            atk._template   = getattr(weapon, "template", None)
+            # Some monsters' natural weapons count as magical (a lich, a
+            # balor); the template says so explicitly.
+            atk.magical     = bool((atk._template or {}).get("magical", False))
+            # A web or a net: the hit matters, the damage does not.
+            if (atk._template or {}).get("no_damage"):
+                atk.base_dice  = (0, 1)
+                atk.damage_mod = 0
 
         # Apply disadvantage from range check
         if self.battle_map.get_position(attacker) and self.battle_map.get_position(target):

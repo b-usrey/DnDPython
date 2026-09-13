@@ -49,6 +49,18 @@ class Attack(ABC):
         # to hook every attack individually.
         self.crit_threshold = getattr(attacker, "crit_threshold", 20)
         self.result         = {}
+        # Set by the target's conditions: a melee hit on a paralyzed or
+        # unconscious creature from within 5 ft is automatically a crit.
+        self.auto_crit_on_hit = False
+        # Magical attacks get past "resistant to nonmagical bludgeoning,
+        # piercing and slashing". Magic weapons and spell attacks count.
+        it = self.item
+        self.magical = bool(it and (
+            getattr(it, "magic_bonus", 0)
+            or getattr(it, "attack_bonus", 0) > 0
+            or getattr(it, "is_spell", False)
+            or "+" in getattr(it, "name", "")
+        ))
 
     @abstractmethod
     def roll_to_hit(self): pass
@@ -155,6 +167,8 @@ class WeaponAttack(Attack):
         self.result["attack_total"]  = total
         # A critical hit always hits regardless of AC
         self.result["hit"]           = (total >= self.target.ac) or self.critical
+        if self.result["hit"] and self.auto_crit_on_hit:
+            self.critical = True
         return self.result
 
     def roll_damage(self):

@@ -93,12 +93,53 @@ class Creature:
 
         # ── Damage resistances (set of damage type strings) ───────────────
         self.resistances: set = set()
+        # Immunity takes damage of that type to 0; vulnerability doubles it.
+        self.immunities: set = set()
+        self.vulnerabilities: set = set()
+        # "Resistant (or immune) to bludgeoning, piercing and slashing from
+        # nonmagical attacks" -- common on undead, fiends and lycanthropes.
+        # None, "resist" or "immune".
+        self.nonmagical_physical = None
+        self.condition_immunities: set = set()
+        # Damage types taken since this creature's own turn last started.
+        # Read by Regeneration: fire or acid stops a troll healing.
+        self.damage_types_taken: set = set()
 
         # ── Features & events ────────────────────────────────────────────
         self.features = []
         self.event_manager = event_manager
         self.event_manager.subscribe("damage", self._on_damage_event)
         self.event_manager.subscribe("attack", self._on_attack_event)
+        self.event_manager.subscribe("saving_throw", self._on_saving_throw_event)
+
+    # ── Position ──────────────────────────────────────────────────────────
+
+    @property
+    def pos(self):
+        """
+        (col, row) on the battle map, or None if not on a map.
+
+        The map keeps positions in its own table, but area spells and several
+        features read creature.pos -- which nothing ever set. Every one of
+        them silently found no targets: Fireball, Lightning Bolt, Burning
+        Hands and Cone of Cold never fired in a simulation, and neither
+        could a breath weapon. Asking the map keeps this always current.
+        """
+        bm = getattr(self, "battle_map", None)
+        if bm is not None:
+            try:
+                where = bm.get_position(self)
+            except (LookupError, AttributeError, KeyError):
+                where = None
+            if where is not None:
+                return where
+        # Off the map (unit tests, a creature not yet placed): fall back to
+        # an explicitly assigned position. The map stays authoritative.
+        return getattr(self, "_pos_override", None)
+
+    @pos.setter
+    def pos(self, value):
+        self._pos_override = value
 
     # ── HP properties ─────────────────────────────────────────────────────
 
@@ -147,7 +188,7 @@ class Creature:
         self._shield_ac = bonus
         self.compute_ac()
 
-    def take_damage(self, amount, damage_type=None, critical=False):
+    def take_damage(self, amount, damage_type=None, critical=False, magical=False):
         """
         Apply damage to this creature.
 
@@ -169,8 +210,20 @@ class Creature:
         if amount <= 0:
             return 0
 
-        if damage_type and damage_type.lower() in self.resistances:
+        dtype = damage_type.lower() if damage_type else None
+        if dtype:
+            self.damage_types_taken.add(dtype)
+        physical = dtype in ("bludgeoning", "piercing", "slashing")
+        if dtype and dtype in self.immunities:
+            return 0
+        if physical and not magical and self.nonmagical_physical == "immune":
+            return 0
+        if dtype and (dtype in self.resistances
+                      or (physical and not magical
+                          and self.nonmagical_physical == "resist")):
             amount = max(1, amount // 2)
+        if dtype and dtype in self.vulnerabilities:
+            amount *= 2
 
         if self.has_condition("dying"):
             self._damage_while_dying(amount, critical)
@@ -182,7 +235,11 @@ class Creature:
         remaining = amount - absorbed
 
         was_alive = self._current_hp > 0
-        self._current_hp = max(0, self._current_hp - remaining)
+        new_hp = max(0, self._current_hp - remaining)
+        if was_alive and new_hp == 0 and self._survives_drop_to_zero(
+                remaining, dtype, critical):
+            new_hp = 1
+        self._current_hp = new_hp
 
         if was_alive and self._current_hp == 0:
             self._on_downed()
@@ -418,6 +475,60 @@ class Creature:
         # Unconscious (including dying): attacks against it have advantage
         if target is self and self.has_condition("unconscious"):
             attack.advantage = True
+        # Paralyzed, stunned or petrified: attacks against it have advantage.
+        if target is self and any(self.has_condition(c) for c in
+                                  ("paralyzed", "stunned", "petrified")):
+            attack.advantage = True
+        # Paralyzed or unconscious: a hit from within 5 ft is a critical hit.
+        if target is self and (self.has_condition("paralyzed")
+                               or self.has_condition("unconscious")):
+            if self._within_5ft(attacker):
+                attack.auto_crit_on_hit = True
+        # Blinded: its own attacks have disadvantage, attacks against it advantage.
+        if attacker is self and self.has_condition("blinded"):
+            attack.disadvantage = True
+        if target is self and self.has_condition("blinded"):
+            attack.advantage = True
+        # Frightened or poisoned: its attack rolls have disadvantage.
+        if attacker is self and (self.has_condition("frightened")
+                                 or self.has_condition("poisoned")):
+            attack.disadvantage = True
+
+    def _within_5ft(self, other) -> bool:
+        bm = getattr(self, "battle_map", None)
+        if bm is None or other is None:
+            return False
+        try:
+            return bm.distance_between(self, other) <= 5
+        except (LookupError, AttributeError):
+            return False
+
+    def _on_saving_throw_event(self, ctx):
+        """Paralyzed, stunned, petrified or unconscious creatures
+        automatically fail Strength and Dexterity saves."""
+        if ctx.get("target") is not self:
+            return
+        if ctx.get("ability") not in ("Str", "Dex"):
+            return
+        if any(self.has_condition(c) for c in
+               ("paralyzed", "stunned", "petrified", "unconscious")):
+            ctx["bonus"] = ctx.get("bonus", 0) - 100
+
+    def is_incapacitated(self) -> bool:
+        """True for any condition that takes away actions and reactions.
+        Paralyzed, stunned and petrified all include incapacitated."""
+        return any(self.has_condition(c) for c in
+                   ("incapacitated", "paralyzed", "stunned",
+                    "petrified", "unconscious"))
+
+    def _survives_drop_to_zero(self, damage, damage_type, critical) -> bool:
+        """Ask features whether this creature stays at 1 HP instead of
+        dropping to 0 -- Undead Fortitude, for instance."""
+        for feat in self.features:
+            hook = getattr(feat, "prevent_drop_to_zero", None)
+            if hook and hook(damage, damage_type, critical):
+                return True
+        return False
 
     def _on_damage_event(self, data):
         """
@@ -438,13 +549,19 @@ class Creature:
             self.take_damage(
                 damage, damage_type=dmg_type,
                 critical=getattr(attack, "critical", False),
+                magical=getattr(attack, "magical", False),
             )
             print(f"  ({self._current_hp}/{self._max_hp} HP remaining)")
 
     # ── Conditions ────────────────────────────────────────────────────────
 
     def add_condition(self, condition):
-        self.conditions.add(condition.lower())
+        """Add a condition. Returns False, and adds nothing, if immune."""
+        c = condition.lower()
+        if c in self.condition_immunities:
+            return False
+        self.conditions.add(c)
+        return True
 
     def remove_condition(self, condition):
         self.conditions.discard(condition.lower())
@@ -570,8 +687,21 @@ class Creature:
 
     def start_turn(self):
         self.actions.reset()
+        # Speed spent standing up last turn comes back.
+        if getattr(self, "_speed_penalty", 0):
+            self.speed += self._speed_penalty
+            self._speed_penalty = 0
         # Dodge effect expires at the start of the creature's next turn
         self.remove_condition("dodging")
+        # Disengage (e.g. a goblin's Nimble Escape) lasts for one turn.
+        self._disengaged = False
+        # Prone: stand up, which costs half your movement (PHB p.190-191).
+        # Nothing used to remove prone at all, so one wolf bite left a PC
+        # at disadvantage for the rest of the fight.
+        if self.has_condition("prone") and not self.is_incapacitated():
+            self.remove_condition("prone")
+            self._speed_penalty = self.speed // 2
+            self.speed -= self._speed_penalty
 
     # ── Attacks ───────────────────────────────────────────────────────────
 

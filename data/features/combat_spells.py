@@ -70,6 +70,10 @@ _ABILITY_BY_CLASS = {
 
 
 def _spell_ability(owner) -> str:
+    # Monsters have no class levels; their stat block names the ability.
+    ability = getattr(owner, "spellcasting_ability", None)
+    if ability:
+        return ability
     for cls, _ in getattr(owner, "classes", []):
         if cls in _ABILITY_BY_CLASS:
             return _ABILITY_BY_CLASS[cls]
@@ -78,7 +82,9 @@ def _spell_ability(owner) -> str:
 
 def _cantrip_scale(owner) -> int:
     """Cantrip damage scaling: 1 die at lv1, +1 at lv5/11/17."""
-    lvl = max((l for _, l in getattr(owner, "classes", [])), default=1)
+    lvl = getattr(owner, "caster_level", None)   # monsters: from the stat block
+    if lvl is None:
+        lvl = max((l for _, l in getattr(owner, "classes", [])), default=1)
     return 1 + (lvl >= 5) + (lvl >= 11) + (lvl >= 17)
 
 
@@ -122,6 +128,9 @@ def _make_spell_weapon(owner, name, damage_die, damage_type,
         long_range   = long_range,
         properties   = [],
     )
+    # Marks this as a spell, not a weapon: an opportunity attack must be a
+    # melee weapon attack, so CombatManager skips these when choosing one.
+    item.is_spell = True
     owner.inventory.append(item)
     owner.equipped_items.append(item)
     return item
@@ -170,6 +179,31 @@ def _creatures_in_line(creatures: list, origin: tuple, end: tuple, half_width_sq
         cx = ox + t_clamped * dx
         cy = oy + t_clamped * dy
         if math.hypot(px - cx, py - cy) <= half_width_sq:
+            result.append(c)
+    return result
+
+
+def _creatures_in_cone(creatures: list, origin: tuple, unit: tuple, length_sq: float) -> list:
+    """
+    Return creatures inside a 5e cone from origin, aimed along unit.
+
+    A cone's width at distance d from its point of origin equals d, so a
+    square is inside when its projection t along the aim lies in (0, length]
+    and it sits within t/2 of the axis. Half a square of slack on both tests
+    because the cone only has to clip a square, not cover it.
+    """
+    ox, oy = origin
+    ux, uy = unit
+    result = []
+    for c in creatures:
+        pos = getattr(c, "pos", None)
+        if not pos:
+            continue
+        vx, vy = pos[0] - ox, pos[1] - oy
+        t = vx * ux + vy * uy
+        if t <= 0 or t > length_sq + 0.5:
+            continue
+        if abs(vx * uy - vy * ux) <= t / 2.0 + 0.5:
             result.append(c)
     return result
 
@@ -298,9 +332,10 @@ class _AoESpell(_ActionSpell):
     FRIENDLY_FIRE_MAX = 0.0    # max ally_dmg / total_dmg ratio
     FRIENDLY_PENALTY  = 2.0    # score penalty multiplier for ally damage
 
-    SHAPE             = "burst"  # "burst" or "line"
+    SHAPE             = "burst"  # "burst", "line" or "cone"
     LINE_LENGTH_FT    = 100     # line shape: max segment length
     LINE_WIDTH_FT     = 5       # line shape: segment width
+    CONE_LENGTH_FT    = 15      # cone shape: length from the caster
 
     # ------------------------------------------------------------------
     # Turn entry point (replaces _ActionSpell.on_turn_started)
@@ -387,6 +422,8 @@ class _AoESpell(_ActionSpell):
 
         if self.SHAPE == "line":
             placements = self._line_placements(caster_pos, all_enemies, all_allies)
+        elif self.SHAPE == "cone":
+            placements = self._cone_placements(caster_pos, all_enemies, all_allies)
         else:
             placements = self._burst_placements(
                 caster_pos, battle_map, all_enemies, all_allies
@@ -502,6 +539,36 @@ class _AoESpell(_ActionSpell):
             yield (
                 _creatures_in_line(all_enemies, caster_pos, end, half_width_sq),
                 _creatures_in_line(all_allies,  caster_pos, end, half_width_sq),
+            )
+
+    # ------------------------------------------------------------------
+    # Cone placement
+    # ------------------------------------------------------------------
+
+    def _cone_placements(self, caster_pos, all_enemies, all_allies):
+        """
+        Yield (enemies_caught, allies_caught) for each candidate cone
+        direction. Like a line, a cone always starts at the caster;
+        candidate aims go straight through each living enemy.
+        """
+        length_sq = self.CONE_LENGTH_FT / 5.0
+        seen_dirs: set = set()
+        for e in all_enemies:
+            epos = getattr(e, "pos", None)
+            if not epos or epos == caster_pos:
+                continue
+            dx, dy = epos[0] - caster_pos[0], epos[1] - caster_pos[1]
+            dist = math.hypot(dx, dy)
+            if dist == 0:
+                continue
+            unit = (dx / dist, dy / dist)
+            key = (round(unit[0], 2), round(unit[1], 2))
+            if key in seen_dirs:
+                continue
+            seen_dirs.add(key)
+            yield (
+                _creatures_in_cone(all_enemies, caster_pos, unit, length_sq),
+                _creatures_in_cone(all_allies,  caster_pos, unit, length_sq),
             )
 
     # ------------------------------------------------------------------
@@ -1648,3 +1715,11 @@ class SpiritualWeapon(Feature):
             print(f"  {creature.name}: Spiritual Weapon hits {target.name} — {dmg} force!")
         else:
             print(f"  {creature.name}: Spiritual Weapon misses {target.name}")
+
+
+# Cones are cones. Burning Hands and Cone of Cold used to be modelled as a
+# circle around the caster, catching creatures behind as well as in front
+# and tripping the friendly-fire gate on allies standing at the caster's
+# back. They now use the real cone shape the monster breath weapons use.
+BurningHands.SHAPE, BurningHands.CONE_LENGTH_FT = "cone", 15
+ConeOfCold.SHAPE,   ConeOfCold.CONE_LENGTH_FT   = "cone", 60
