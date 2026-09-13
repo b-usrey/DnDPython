@@ -1,5 +1,5 @@
 {
-  "name": "Training \u00e2\u20ac\u201d four-PC party ambushed in the warrens",
+  "name": "Eval roster \u2014 vampire spawn and wraith with gnoll thralls (held out)",
   "max_rounds": 30,
   "rewards": {
     "damage_scale": 0.02
@@ -197,23 +197,18 @@
   ],
   "monsters": [
     {
-      "type": "ETTIN",
+      "type": "VAMPIRE_SPAWN",
       "count": 1,
       "weapon_role": "all"
     },
     {
-      "type": "OGRE",
+      "type": "WRAITH",
       "count": 1,
       "weapon_role": "all"
     },
     {
-      "type": "WIGHT",
-      "count": 3,
-      "weapon_role": "all"
-    },
-    {
-      "type": "ZOMBIE",
-      "count": 2,
+      "type": "GNOLL",
+      "count": 4,
       "weapon_role": "all"
     }
   ]

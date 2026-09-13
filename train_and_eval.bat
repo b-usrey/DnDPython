@@ -19,15 +19,13 @@ setlocal EnableDelayedExpansion
 :: the trained team wins 40-60%% against the no-selector baseline with fights
 :: lasting 10-13 rounds. Eval scenarios are held out of training, so results
 :: measure generalisation rather than fit.
-set RUN_NAME=party_run_20260911
-REM Party scenarios: a 4-PC party, not a lone hero. With one PC on the board
-REM ally_under_pressure (>= 2 enemies on one ally) can never fire, so PROTECT
-REM was a guaranteed no-op and FOCUS_FIRE had one enemy to choose from -- 3 of
-REM the 5 actions aliased the default planner and the policy collapsed onto it.
-REM All three sit at 45-50%% red win under the default AI, and no monster type
-REM is shared between the training set and the held-out eval.
-set TRAIN_SCENARIOS=training_party_skirmish.json training_party_ambush.json
-set EVAL_SCENARIOS=eval_party_warband.json eval_mixed_undead.json
+set RUN_NAME=roster_run_20260912
+REM Roster training set: the same legal level-5 party against the whole SRD
+REM roster, each scenario balanced to a 40-60%% monster win rate with the
+REM stat-block fix and monster abilities in place. The evals are held out:
+REM none of their monster types appears in any training scenario.
+set TRAIN_SCENARIOS=training_roster_warband.json training_roster_undead.json training_roster_beasts.json training_roster_dragon.json training_roster_casters.json training_party_skirmish.json training_party_ambush.json
+set EVAL_SCENARIOS=eval_roster_undead_lords.json eval_roster_monstrosities.json eval_party_warband.json
 set PYTHON=python
 set WORKERS=4
 

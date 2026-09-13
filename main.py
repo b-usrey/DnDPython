@@ -37,7 +37,7 @@ for _stream in (_sys.stdout, _sys.stderr):
 
 def load_json(filename):
     path = os.path.join("scenarios", filename)
-    with open(path, "r") as f:
+    with open(path, "r", encoding="utf-8") as f:
         return json.load(f)
 
 

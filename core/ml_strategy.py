@@ -137,7 +137,7 @@ class CombatEnv:
         silent: bool = True,
     ):
         if isinstance(scenario_data, str):
-            with open(scenario_data) as f:
+            with open(scenario_data, encoding="utf-8") as f:
                 scenario_data = json.load(f)
         if isinstance(scenario_data, dict):
             self._scenarios = [scenario_data]

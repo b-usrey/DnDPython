@@ -1,56 +1,209 @@
 {
-  "name": "Eval — four-PC party vs beast warband (held out)",
+  "name": "Eval \u2014 four-PC party vs beast warband (held out)",
   "max_rounds": 30,
-  "rewards": { "damage_scale": 0.02 },
+  "rewards": {
+    "damage_scale": 0.02
+  },
   "map": {
     "width": 22,
     "height": 20,
-    "walls": [[9, 2, 1, 6], [9, 12, 1, 6], [15, 0, 1, 4], [15, 16, 1, 4]],
-    "difficult_terrain": [[12, 8, 5, 4]]
+    "walls": [
+      [
+        9,
+        2,
+        1,
+        6
+      ],
+      [
+        9,
+        12,
+        1,
+        6
+      ],
+      [
+        15,
+        0,
+        1,
+        4
+      ],
+      [
+        15,
+        16,
+        1,
+        4
+      ]
+    ],
+    "difficult_terrain": [
+      [
+        12,
+        8,
+        5,
+        4
+      ]
+    ]
   },
   "players": [
     {
       "name": "Thando",
-      "classes": [["Fighter", 5]],
-      "subclasses": { "Fighter": "Champion" },
-      "stats": { "Str": 14, "Dex": 19, "Con": 14, "Int": 8, "Wis": 12, "Cha": 10 },
-      "choices": [["Fighter", 1, "Fighting Style", "Two-Weapon Fighting"]],
-      "items": ["Longsword", "Shortsword", "Chain Mail"],
-      "equipped": ["Longsword", "Shortsword", "Chain Mail"],
-      "features": ["Dual Wielder"]
+      "classes": [
+        [
+          "Fighter",
+          5
+        ]
+      ],
+      "subclasses": {
+        "Fighter": "Champion"
+      },
+      "stats": {
+        "Str": 14,
+        "Dex": 19,
+        "Con": 14,
+        "Int": 8,
+        "Wis": 12,
+        "Cha": 10
+      },
+      "choices": [
+        [
+          "Fighter",
+          1,
+          "Fighting Style",
+          "Two-Weapon Fighting"
+        ]
+      ],
+      "items": [
+        "Longsword",
+        "Shortsword",
+        "Chain Mail"
+      ],
+      "equipped": [
+        "Longsword",
+        "Shortsword",
+        "Chain Mail"
+      ],
+      "features": [
+        "Dual Wielder"
+      ]
     },
     {
       "name": "Brendiir",
-      "classes": [["Ranger", 5]],
-      "subclasses": { "Ranger": "Gloomstalker" },
-      "stats": { "Str": 10, "Dex": 20, "Con": 14, "Int": 9, "Wis": 16, "Cha": 8 },
-      "choices": [["Ranger", 2, "Fighting Style", "Archery"]],
-      "items": ["Longbow", "Studded Leather"],
-      "equipped": ["Longbow", "Studded Leather"],
-      "features": ["Sharpshooter"]
+      "classes": [
+        [
+          "Ranger",
+          5
+        ]
+      ],
+      "subclasses": {
+        "Ranger": "Gloomstalker"
+      },
+      "stats": {
+        "Str": 10,
+        "Dex": 20,
+        "Con": 14,
+        "Int": 9,
+        "Wis": 16,
+        "Cha": 8
+      },
+      "choices": [
+        [
+          "Ranger",
+          2,
+          "Fighting Style",
+          "Archery"
+        ]
+      ],
+      "items": [
+        "Longbow",
+        "Studded Leather"
+      ],
+      "equipped": [
+        "Longbow",
+        "Studded Leather"
+      ],
+      "features": [
+        "Sharpshooter"
+      ]
     },
     {
       "name": "Kesla",
-      "classes": [["Cleric", 5]],
-      "subclasses": { "Cleric": "War" },
-      "stats": { "Str": 14, "Dex": 10, "Con": 14, "Int": 10, "Wis": 17, "Cha": 12 },
-      "items": ["Mace", "Shield", "Scale Mail"],
-      "equipped": ["Mace", "Shield", "Scale Mail"],
-      "features": ["Tough"]
+      "classes": [
+        [
+          "Cleric",
+          5
+        ]
+      ],
+      "subclasses": {
+        "Cleric": "War"
+      },
+      "stats": {
+        "Str": 14,
+        "Dex": 10,
+        "Con": 14,
+        "Int": 10,
+        "Wis": 17,
+        "Cha": 12
+      },
+      "items": [
+        "Mace",
+        "Shield",
+        "Scale Mail"
+      ],
+      "equipped": [
+        "Mace",
+        "Shield",
+        "Scale Mail"
+      ],
+      "features": [
+        "Tough"
+      ]
     },
     {
       "name": "Vurin",
-      "classes": [["Rogue", 5]],
-      "subclasses": { "Rogue": "Thief" },
-      "stats": { "Str": 10, "Dex": 17, "Con": 14, "Int": 13, "Wis": 12, "Cha": 14 },
-      "items": ["Rapier", "Shortbow", "Leather Armor"],
-      "equipped": ["Rapier", "Leather Armor"],
-      "features": ["Piercer"]
+      "classes": [
+        [
+          "Rogue",
+          5
+        ]
+      ],
+      "subclasses": {
+        "Rogue": "Thief"
+      },
+      "stats": {
+        "Str": 10,
+        "Dex": 17,
+        "Con": 14,
+        "Int": 13,
+        "Wis": 12,
+        "Cha": 14
+      },
+      "items": [
+        "Rapier",
+        "Shortbow",
+        "Leather Armor"
+      ],
+      "equipped": [
+        "Rapier",
+        "Leather Armor"
+      ],
+      "features": [
+        "Piercer"
+      ]
     }
   ],
   "monsters": [
-    { "type": "DISPLACER_BEAST", "count": 5, "weapon_role": "all" },
-    { "type": "OWLBEAR",         "count": 4, "weapon_role": "all" },
-    { "type": "GNOLL",           "count": 4, "weapon_role": "all" }
+    {
+      "type": "DISPLACER_BEAST",
+      "count": 1,
+      "weapon_role": "all"
+    },
+    {
+      "type": "OWLBEAR",
+      "count": 1,
+      "weapon_role": "all"
+    },
+    {
+      "type": "GNOLL",
+      "count": 7,
+      "weapon_role": "all"
+    }
   ]
 }

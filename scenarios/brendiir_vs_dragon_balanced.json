@@ -6,47 +6,142 @@
     "height": 16,
     "walls": [],
     "difficult_terrain": [
-      [9, 6, 4, 4]
+      [
+        9,
+        6,
+        4,
+        4
+      ]
     ]
   },
   "positions": {
-    "Brendiir": [2, 8],
-    "Thando":   [3, 8],
+    "Brendiir": [
+      2,
+      8
+    ],
+    "Thando": [
+      3,
+      8
+    ],
     "monsters": [
-      [18, 8], [16, 5], [16, 11], [15, 3], [15, 13], [14, 8], [17, 2]
+      [
+        18,
+        8
+      ],
+      [
+        16,
+        5
+      ],
+      [
+        16,
+        11
+      ],
+      [
+        15,
+        3
+      ],
+      [
+        15,
+        13
+      ],
+      [
+        14,
+        8
+      ],
+      [
+        17,
+        2
+      ]
     ]
   },
   "players": [
     {
       "name": "Brendiir",
-      "classes": [["Ranger", 5]],
-      "subclasses": {"Ranger": "Gloomstalker"},
-      "stats": {"Str": 10, "Dex": 20, "Con": 14, "Int": 9, "Wis": 16, "Cha": 8},
-      "choices": [["Ranger", 2, "Fighting Style", "Archery"]],
-      "items": ["Longbow", "Studded Leather"],
-      "equipped": ["Longbow", "Studded Leather"],
+      "classes": [
+        [
+          "Ranger",
+          5
+        ]
+      ],
+      "subclasses": {
+        "Ranger": "Gloomstalker"
+      },
+      "stats": {
+        "Str": 10,
+        "Dex": 20,
+        "Con": 14,
+        "Int": 9,
+        "Wis": 16,
+        "Cha": 8
+      },
+      "choices": [
+        [
+          "Ranger",
+          2,
+          "Fighting Style",
+          "Archery"
+        ]
+      ],
+      "items": [
+        "Longbow",
+        "Studded Leather"
+      ],
+      "equipped": [
+        "Longbow",
+        "Studded Leather"
+      ],
       "features": []
     },
     {
       "name": "Thando",
-      "classes": [["Fighter", 5]],
-      "subclasses": {"Fighter": "Champion"},
-      "stats": {"Str": 14, "Dex": 19, "Con": 14, "Int": 8, "Wis": 12, "Cha": 10},
-      "choices": [["Fighter", 1, "Fighting Style", "Two-Weapon Fighting"]],
-      "items": ["Longsword", "Shortsword", "Chain Mail"],
-      "equipped": ["Longsword", "Shortsword", "Chain Mail"],
+      "classes": [
+        [
+          "Fighter",
+          5
+        ]
+      ],
+      "subclasses": {
+        "Fighter": "Champion"
+      },
+      "stats": {
+        "Str": 14,
+        "Dex": 19,
+        "Con": 14,
+        "Int": 8,
+        "Wis": 12,
+        "Cha": 10
+      },
+      "choices": [
+        [
+          "Fighter",
+          1,
+          "Fighting Style",
+          "Two-Weapon Fighting"
+        ]
+      ],
+      "items": [
+        "Longsword",
+        "Shortsword",
+        "Chain Mail"
+      ],
+      "equipped": [
+        "Longsword",
+        "Shortsword",
+        "Chain Mail"
+      ],
       "features": []
     }
   ],
   "monsters": [
     {
-      "type": "YOUNG_GREEN_DRAGON",
-      "count": 1
+      "type": "CHIMERA",
+      "count": 1,
+      "weapon_role": "all"
     },
     {
       "type": "HOBGOBLIN",
-      "count": 6,
-      "weapon_role": "melee"
+      "count": 3,
+      "weapon_role": "all"
     }
   ],
   "rewards": {

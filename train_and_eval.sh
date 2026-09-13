@@ -19,14 +19,17 @@ cd "$(dirname "$0")"
 
 # ── CONFIG ──────────────────────────────────────────────────
 RUN_NAME=${RUN_NAME:-overnight_run_$(date +%Y%m%d)}
-# Party scenarios: a 4-PC party, not a lone hero. With one PC on the board
-# `ally_under_pressure` (>= 2 enemies on one ally) can never fire, so PROTECT
-# was a guaranteed no-op and FOCUS_FIRE had only one enemy to choose from --
-# 3 of the 5 actions aliased the default planner and the policy collapsed
-# onto it. All three sit at 45-50% red win under the default AI, and no
-# monster type is shared between the training set and the held-out eval.
-TRAIN_SCENARIOS=(training_party_skirmish.json training_party_ambush.json)
-EVAL_SCENARIOS=(eval_party_warband.json eval_mixed_undead.json)
+# Roster training set: the same legal level-5 party against the whole
+# SRD roster -- goblinoid warbands, crypt undead, wolf packs and spiders, a
+# young dragon with kobolds, a spellcasting coven, plus the two original
+# party fights. Every scenario is balanced to a 40-60% monster win rate
+# with the stat-block fix and monster abilities in place.
+#
+# The evals are held out: vampire spawn, wraith, gnoll, chimera, minotaur,
+# displacer beast and owlbear appear in no training scenario at all, so
+# they measure whether the policy generalises to monsters it never saw.
+TRAIN_SCENARIOS=(training_roster_warband.json training_roster_undead.json training_roster_beasts.json training_roster_dragon.json training_roster_casters.json training_party_skirmish.json training_party_ambush.json)
+EVAL_SCENARIOS=(eval_roster_undead_lords.json eval_roster_monstrosities.json eval_party_warband.json)
 PYTHON=${PYTHON:-.venv/bin/python}
 WORKERS=4
 export MPLBACKEND=Agg   # headless box: --plot must render to file, not a window

@@ -1,49 +1,49 @@
 {
-  "name": "Training \u00e2\u20ac\u201d four-PC party ambushed in the warrens",
+  "name": "Eval roster \u2014 chimera, minotaur and displacer beasts (held out)",
   "max_rounds": 30,
   "rewards": {
     "damage_scale": 0.02
   },
   "map": {
-    "width": 18,
-    "height": 14,
+    "width": 22,
+    "height": 16,
     "walls": [
       [
-        7,
+        9,
         0,
         1,
         5
       ],
       [
-        7,
         9,
+        11,
         1,
         5
       ],
       [
-        12,
-        3,
+        15,
+        4,
         1,
         2
       ],
       [
-        12,
-        9,
+        15,
+        10,
         1,
         2
       ]
     ],
     "difficult_terrain": [
       [
-        4,
         5,
+        6,
         3,
         4
       ],
       [
-        13,
-        5,
-        3,
+        17,
+        6,
+        2,
         4
       ]
     ]
@@ -197,22 +197,17 @@
   ],
   "monsters": [
     {
-      "type": "ETTIN",
+      "type": "CHIMERA",
       "count": 1,
       "weapon_role": "all"
     },
     {
-      "type": "OGRE",
+      "type": "MINOTAUR",
       "count": 1,
       "weapon_role": "all"
     },
     {
-      "type": "WIGHT",
-      "count": 3,
-      "weapon_role": "all"
-    },
-    {
-      "type": "ZOMBIE",
+      "type": "DISPLACER_BEAST",
       "count": 2,
       "weapon_role": "all"
     }
